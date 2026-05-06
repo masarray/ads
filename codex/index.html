@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GridDefense ADS Web App</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace">
+        <section class="sld-panel">
+          <div class="panel-head">
+            <div class="sld-brand">
+              <div class="brand-mark">ADS</div>
+              <div>
+                <h1>GridDefense ADS</h1>
+                <p>Single Line HMI. Click CB to execute; right-click CB to simulate breaker fail.</p>
+              </div>
+            </div>
+          </div>
+          <div class="sld-stage">
+            <div id="sldMount" class="sld-mount" aria-live="polite"></div>
+            <aside id="sldOverlay" class="sld-overlay" aria-live="polite"></aside>
+          </div>
+          <div class="legend">
+            <span><i class="red"></i>Energized</span>
+            <span><i class="black"></i>Dead / open</span>
+            <span><i class="teal"></i>Armed target</span>
+            <span><i class="amber"></i>Overload</span>
+            <span><i class="black"></i>Locked / CB fail</span>
+          </div>
+        </section>
+
+        <aside class="right-rail">
+          <section class="panel decision">
+            <div class="panel-head compact">
+              <div>
+                <h2 id="decisionTitle">Normal Monitoring</h2>
+                <p id="decisionReason">No contingency active.</p>
+              </div>
+              <span id="decisionVerdict" class="pill standby">STANDBY</span>
+            </div>
+            <div class="metric-row">
+              <article>
+                <span>Selected Shedding</span>
+                <strong id="selectedMw">0 MW</strong>
+              </article>
+              <article>
+                <span>Loss Avoided</span>
+                <strong id="lossAvoided">0 MW</strong>
+              </article>
+            </div>
+            <div id="targetList" class="target-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head compact">
+              <div>
+                <h2>Contingency Injection</h2>
+                <p>Randomized BC-style event and parameter tests.</p>
+              </div>
+            </div>
+            <div id="scenarioGrid" class="scenario-grid"></div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="lower-grid">
+        <section class="panel matrix-panel">
+          <div class="panel-head compact">
+            <div>
+              <h2>Arming Matrix</h2>
+              <p>Adaptive target map generated from contingency, live MW, priority, sensitivity, and breaker availability.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Trigger</th>
+                  <th>Mode</th>
+                  <th>Requirement</th>
+                  <th>Armed Combination</th>
+                  <th>Total MW</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody id="armingMatrix"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel priority-panel">
+          <div class="panel-head compact">
+            <div>
+              <h2>Load Priority</h2>
+              <p>Group 4 is blocked. The optimizer searches the smallest valid total MW after respecting operational priority.</p>
+            </div>
+          </div>
+          <div id="priorityEditor" class="priority-editor"></div>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="panel-head compact">
+            <div>
+              <h2>Decision Log</h2>
+              <p>Traceable controller reasoning for FAT and BC validation.</p>
+            </div>
+          </div>
+          <div id="eventLog" class="event-log"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="cbContextMenu" class="cb-context-menu" role="menu" aria-hidden="true">
+      <button type="button" id="simulateCbFail" role="menuitem">Simulate CB Fail</button>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

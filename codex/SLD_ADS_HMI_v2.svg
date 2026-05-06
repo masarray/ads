@@ -1,0 +1,508 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="TITLE DESC">
+  <title id="TITLE">Adaptive Defense Scheme Single Line HMI</title>
+  <desc id="DESC">Clean interactive single line diagram for ADS load shedding, breaker control, contingency arming, and active power display.</desc>
+  <style>
+    :root {
+      --bg: #f8fbfb;
+      --panel: #ffffff;
+      --ink: #13201f;
+      --muted: #5d716e;
+      --grid: #d8e7e4;
+      --energized: #d51f2a;
+      --dead: #050505;
+      --armed: #0f9488;
+      --blocked: #9aa3a1;
+      --warn: #d97706;
+      --trip: #111111;
+      --bus: #d51f2a;
+      --cb-fill: #d51f2a;
+      --cb-stroke: #7f1d1d;
+    }
+
+    .frame { fill: var(--bg); }
+    .panel { fill: rgba(255,255,255,.88); stroke: #d5e5e2; stroke-width: 1.5; }
+    .station-title { font: 600 18px Aptos, "Segoe UI", Arial, sans-serif; fill: var(--ink); letter-spacing: .01em; }
+    .label { font: 560 13px Aptos, "Segoe UI", Arial, sans-serif; fill: var(--ink); }
+    .subtle { font: 450 11px Aptos, "Segoe UI", Arial, sans-serif; fill: var(--muted); }
+    .mw { font: 650 12px Aptos, "Segoe UI", Arial, sans-serif; fill: var(--energized); }
+    .priority { font: 650 10px Aptos, "Segoe UI", Arial, sans-serif; fill: #fff; }
+    .priority-chip { fill: #123d39; }
+    .arm-text { font: 620 9px Aptos, "Segoe UI", Arial, sans-serif; fill: var(--armed); opacity: .0; letter-spacing: .04em; }
+
+    .conductor, .busbar, .tap { stroke: var(--energized); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+    .busbar { stroke-width: 10; }
+    .equipment-line { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+    .symbol { stroke: var(--ink); stroke-width: 2.4; fill: #fff; }
+    .cb-body { fill: var(--cb-fill); stroke: var(--cb-stroke); stroke-width: 2.5; rx: 2; }
+    .cb-blade { display: none; }
+    .node-dot { fill: var(--energized); stroke: #7f1d1d; stroke-width: 1.2; }
+    .hit-target { fill: transparent; cursor: pointer; pointer-events: all; }
+
+    .load-card { fill: #fff; stroke: #d8e7e4; stroke-width: 1.2; rx: 8; cursor: pointer; }
+    .load-symbol { stroke: var(--ink); stroke-width: 2.2; fill: #fff; }
+    .gen-symbol { stroke: var(--ink); stroke-width: 2.2; fill: #fff; }
+
+    .state-dead .conductor,
+    .state-dead .busbar,
+    .state-dead .tap,
+    .state-dead.conductor,
+    .state-dead.busbar,
+    .state-dead.tap,
+    .svg-tripped .conductor,
+    .svg-tripped .busbar,
+    .svg-tripped .tap,
+    .svg-open .cb-blade {
+      stroke: var(--dead) !important;
+    }
+
+    .svg-armed .load-card,
+    .svg-selected .load-card {
+      stroke: var(--armed);
+      stroke-width: 2.5;
+      fill: #ecfffb;
+      filter: drop-shadow(0 0 8px rgba(15, 148, 136, .42));
+      animation: armingGlow 1.15s ease-in-out infinite;
+    }
+
+    .svg-selected .cb-body {
+      fill: var(--energized) !important;
+      stroke: var(--armed) !important;
+      stroke-width: 3.4 !important;
+      filter: drop-shadow(0 0 8px rgba(15, 148, 136, .76));
+      animation: armingGlow 1.15s ease-in-out infinite;
+    }
+
+    .svg-armed .arm-text,
+    .svg-selected .arm-text {
+      opacity: 1;
+    }
+
+    .svg-blocked {
+      opacity: 1;
+      filter: none;
+    }
+
+    .svg-overload .conductor,
+    .svg-overload.conductor,
+    .svg-overload .busbar,
+    .svg-overload.busbar {
+      stroke: var(--warn) !important;
+      stroke-width: 7;
+    }
+
+    .svg-open .cb-body,
+    .svg-tripped .cb-body,
+    .cb-open .cb-body {
+      fill: #050505 !important;
+      stroke: #050505 !important;
+    }
+
+    .cb-closed .cb-body {
+      fill: var(--energized) !important;
+      stroke: #7f1d1d !important;
+    }
+
+    .cb-failed .cb-body {
+      stroke: #050505 !important;
+      stroke-width: 4 !important;
+    }
+
+    .svg-open .mw,
+    .svg-tripped .mw {
+      fill: #111;
+    }
+
+    @keyframes armingGlow {
+      0%, 100% {
+        filter:
+          drop-shadow(0 0 5px rgba(15, 148, 136, .42))
+          drop-shadow(0 0 10px rgba(15, 148, 136, .16));
+      }
+      50% {
+        filter:
+          drop-shadow(0 0 11px rgba(15, 148, 136, .95))
+          drop-shadow(0 0 22px rgba(15, 148, 136, .34));
+      }
+    }
+  </style>
+
+  <rect class="frame" width="1920" height="1080"/>
+  <path d="M0 0H1920V1080H0Z" fill="url(#gridPattern)" opacity=".42"/>
+
+  <defs>
+    <pattern id="gridPattern" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" stroke="#d8e7e4" stroke-width="1"/>
+    </pattern>
+    <g id="loadSymbol">
+      <path class="load-symbol" d="M0 0V26"/>
+      <path class="load-symbol" d="M-9 26H9L0 42Z"/>
+    </g>
+    <g id="generatorSymbol">
+      <circle class="gen-symbol" r="22"/>
+      <text x="-13" y="5" class="subtle">SG</text>
+    </g>
+    <g id="transformerSymbol">
+      <circle class="symbol" cx="-9" cy="0" r="16"/>
+      <circle class="symbol" cx="9" cy="0" r="16"/>
+    </g>
+  </defs>
+
+  <rect class="panel" x="40" y="40" width="1840" height="960" rx="26"/>
+  <text x="72" y="86" class="station-title">GridDefense ADS Simulator - Single Line HMI</text>
+  <text id="CONTINGENCY_LABEL" x="72" y="112" class="subtle" data-kind="contingency">Contingency: NONE</text>
+  <text id="FREQUENCY_LABEL" x="1710" y="86" class="mw" text-anchor="end" data-kind="meter" data-object="SYSTEM_FREQUENCY">50.00 Hz</text>
+  <text x="1710" y="108" class="subtle" text-anchor="end">Red = energized, black = dead/open</text>
+
+  <g id="LINE_AC" data-kind="line" data-object="LINE_AC" data-role="primary-conductor" data-state="closed">
+    <path class="conductor" d="M150 760V188H1288V760"/>
+    <text x="710" y="170" class="label" text-anchor="middle">Line A-C</text>
+    <text id="MW_LINE_AC" x="710" y="190" class="mw" text-anchor="middle">70 MW</text>
+  </g>
+  <g id="LINE_AB" data-kind="line" data-object="LINE_AB" data-role="primary-conductor" data-state="closed">
+    <path class="conductor" d="M245 760V270H555V390"/>
+    <text x="385" y="252" class="label" text-anchor="middle">Line A-B</text>
+    <text id="MW_LINE_AB" x="385" y="272" class="mw" text-anchor="middle">88 MW</text>
+  </g>
+  <g id="LINE_BC" data-kind="line" data-object="LINE_BC" data-role="primary-conductor" data-state="closed">
+    <path class="conductor" d="M1160 760V274H965V390"/>
+    <text x="1058" y="252" class="label" text-anchor="middle">Line B-C</text>
+    <text id="MW_LINE_BC" x="1058" y="272" class="mw" text-anchor="middle">92 MW</text>
+  </g>
+  <g id="LINE_COUPLER" data-kind="line" data-object="LINE_COUPLER" data-role="bus-coupler" data-state="closed">
+    <path class="conductor" d="M646 390V342H708V412"/>
+    <text x="676" y="322" class="subtle" text-anchor="middle">B Coupler</text>
+  </g>
+
+  <g id="GI_A_BUS" data-kind="bus" data-object="GI_A_BUS" data-state="closed">
+    <line class="busbar" x1="75" y1="760" x2="810" y2="760"/>
+    <text x="78" y="735" class="station-title">GI A / Bus</text>
+  </g>
+  <g id="GI_B_BUSA" data-kind="bus" data-object="GI_B_BUSA" data-state="closed">
+    <line class="busbar" x1="470" y1="390" x2="1050" y2="390"/>
+    <text x="470" y="363" class="station-title">GI B / Bus-I</text>
+  </g>
+  <g id="GI_B_BUSB" data-kind="bus" data-object="GI_B_BUSB" data-state="closed">
+    <line class="busbar" x1="470" y1="413" x2="1050" y2="413"/>
+    <text x="470" y="438" class="station-title">GI B / Bus-II</text>
+  </g>
+  <g id="GI_C_BUS" data-kind="bus" data-object="GI_C_BUS" data-state="closed">
+    <line class="busbar" x1="1085" y1="760" x2="1858" y2="760"/>
+    <text x="1088" y="735" class="station-title">GI C / Bus</text>
+  </g>
+
+  <g id="CB_LINE_AC" data-kind="breaker" data-object="LINE_AC" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="120" y="706" width="64" height="64"/>
+    <rect id="CB_LINE_AC_BODY" class="cb-body" x="134" y="724" width="28" height="28"/>
+    <line class="cb-blade" x1="137" y1="749" x2="159" y2="727"/>
+    <text x="148" y="705" class="label" text-anchor="middle">CB A-C</text>
+  </g>
+  <g id="CB_LINE_AB" data-kind="breaker" data-object="LINE_AB" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="214" y="706" width="64" height="64"/>
+    <rect id="CB_LINE_AB_BODY" class="cb-body" x="228" y="724" width="28" height="28"/>
+    <line class="cb-blade" x1="231" y1="749" x2="253" y2="727"/>
+    <text x="242" y="705" class="label" text-anchor="middle">CB A-B</text>
+  </g>
+  <g id="CB_LINE_AB_B" data-kind="breaker" data-object="LINE_AB" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="526" y="359" width="64" height="64"/>
+    <rect id="CB_LINE_AB_B_BODY" class="cb-body" x="540" y="374" width="28" height="28"/>
+    <line class="cb-blade" x1="543" y1="399" x2="565" y2="377"/>
+    <text x="554" y="352" class="label" text-anchor="middle">CB A-B</text>
+  </g>
+  <g id="CB_LINE_BC_B" data-kind="breaker" data-object="LINE_BC" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="932" y="359" width="64" height="64"/>
+    <rect id="CB_LINE_BC_B_BODY" class="cb-body" x="946" y="374" width="28" height="28"/>
+    <line class="cb-blade" x1="949" y1="399" x2="971" y2="377"/>
+    <text x="960" y="352" class="label" text-anchor="middle">CB B-C</text>
+  </g>
+  <g id="CB_LINE_BC_C" data-kind="breaker" data-object="LINE_BC" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="1128" y="706" width="64" height="64"/>
+    <rect id="CB_LINE_BC_C_BODY" class="cb-body" x="1142" y="724" width="28" height="28"/>
+    <line class="cb-blade" x1="1145" y1="749" x2="1167" y2="727"/>
+    <text x="1156" y="705" class="label" text-anchor="middle">CB B-C</text>
+  </g>
+  <g id="CB_LINE_AC_C" data-kind="breaker" data-object="LINE_AC" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="1260" y="706" width="64" height="64"/>
+    <rect id="CB_LINE_AC_C_BODY" class="cb-body" x="1274" y="724" width="28" height="28"/>
+    <line class="cb-blade" x1="1277" y1="749" x2="1299" y2="727"/>
+    <text x="1288" y="705" class="label" text-anchor="middle">CB A-C</text>
+  </g>
+  <g id="CB_COUPLER" data-kind="breaker" data-object="LINE_COUPLER" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="646" y="312" width="64" height="64"/>
+    <rect id="CB_COUPLER_BODY" class="cb-body" x="662" y="328" width="28" height="28"/>
+    <line class="cb-blade" x1="665" y1="353" x2="687" y2="331"/>
+  </g>
+
+  <g id="IBT_A" data-kind="ibt" data-object="IBT_A" data-state="closed">
+    <line class="tap" x1="108" y1="760" x2="108" y2="840"/>
+    <use href="#transformerSymbol" x="108" y="862"/>
+    <text x="108" y="910" class="label" text-anchor="middle">IBT A</text>
+    <text id="MW_IBT_A" x="108" y="930" class="mw" text-anchor="middle">72 MW</text>
+  </g>
+  <g id="CB_IBT_A" data-kind="breaker" data-object="IBT_A" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="78" y="780" width="64" height="64"/>
+    <rect id="CB_IBT_A_BODY" class="cb-body" x="94" y="795" width="28" height="28"/>
+    <line class="cb-blade" x1="97" y1="820" x2="119" y2="798"/>
+  </g>
+  <g id="IBT_C" data-kind="ibt" data-object="IBT_C" data-state="closed">
+    <line class="tap" x1="1820" y1="760" x2="1820" y2="840"/>
+    <use href="#transformerSymbol" x="1820" y="862"/>
+    <text x="1820" y="910" class="label" text-anchor="middle">IBT C</text>
+    <text id="MW_IBT_C" x="1820" y="930" class="mw" text-anchor="middle">145 MW</text>
+  </g>
+  <g id="CB_IBT_C" data-kind="breaker" data-object="IBT_C" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="1790" y="780" width="64" height="64"/>
+    <rect id="CB_IBT_C_BODY" class="cb-body" x="1806" y="795" width="28" height="28"/>
+    <line class="cb-blade" x1="1809" y1="820" x2="1831" y2="798"/>
+  </g>
+
+  <g id="GEN_A1" data-kind="generator" data-object="GEN_A1" data-priority="2" data-state="closed">
+    <line class="tap" x1="330" y1="760" x2="330" y2="842"/>
+    <use href="#generatorSymbol" x="330" y="870"/>
+    <text x="330" y="915" class="label" text-anchor="middle">KIT A1</text>
+    <text id="MW_GEN_A1" x="330" y="934" class="mw" text-anchor="middle">180 MW</text>
+  </g>
+  <g id="CB_GEN_A1" data-kind="breaker" data-object="GEN_A1" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="300" y="780" width="64" height="64"/>
+    <rect id="CB_GEN_A1_BODY" class="cb-body" x="316" y="795" width="28" height="28"/>
+    <line class="cb-blade" x1="319" y1="820" x2="341" y2="798"/>
+  </g>
+  <g id="GEN_A2" data-kind="generator" data-object="GEN_A2" data-priority="1" data-state="closed">
+    <line class="tap" x1="430" y1="760" x2="430" y2="842"/>
+    <use href="#generatorSymbol" x="430" y="870"/>
+    <text x="430" y="915" class="label" text-anchor="middle">KIT A2</text>
+    <text id="MW_GEN_A2" x="430" y="934" class="mw" text-anchor="middle">135 MW</text>
+  </g>
+  <g id="CB_GEN_A2" data-kind="breaker" data-object="GEN_A2" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="400" y="780" width="64" height="64"/>
+    <rect id="CB_GEN_A2_BODY" class="cb-body" x="416" y="795" width="28" height="28"/>
+    <line class="cb-blade" x1="419" y1="820" x2="441" y2="798"/>
+  </g>
+  <g id="GEN_C1" data-kind="generator" data-object="GEN_C1" data-priority="2" data-state="closed">
+    <line class="tap" x1="1330" y1="760" x2="1330" y2="842"/>
+    <use href="#generatorSymbol" x="1330" y="870"/>
+    <text x="1330" y="915" class="label" text-anchor="middle">KIT C1</text>
+    <text id="MW_GEN_C1" x="1330" y="934" class="mw" text-anchor="middle">165 MW</text>
+  </g>
+  <g id="CB_GEN_C1" data-kind="breaker" data-object="GEN_C1" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="1300" y="780" width="64" height="64"/>
+    <rect id="CB_GEN_C1_BODY" class="cb-body" x="1316" y="795" width="28" height="28"/>
+    <line class="cb-blade" x1="1319" y1="820" x2="1341" y2="798"/>
+  </g>
+  <g id="GEN_C2" data-kind="generator" data-object="GEN_C2" data-priority="1" data-state="closed">
+    <line class="tap" x1="1430" y1="760" x2="1430" y2="842"/>
+    <use href="#generatorSymbol" x="1430" y="870"/>
+    <text x="1430" y="915" class="label" text-anchor="middle">KIT C2</text>
+    <text id="MW_GEN_C2" x="1430" y="934" class="mw" text-anchor="middle">145 MW</text>
+  </g>
+  <g id="CB_GEN_C2" data-kind="breaker" data-object="GEN_C2" data-role="open-close" data-state="closed">
+    <rect class="hit-target" x="1400" y="780" width="64" height="64"/>
+    <rect id="CB_GEN_C2_BODY" class="cb-body" x="1416" y="795" width="28" height="28"/>
+    <line class="cb-blade" x1="1419" y1="820" x2="1441" y2="798"/>
+  </g>
+
+  <g id="LOAD_A1" data-kind="load" data-object="LOAD_A1" data-priority="1" data-mw="42" data-state="in-service">
+    <line class="tap" x1="510" y1="760" x2="510" y2="812"/>
+    <g id="CB_LOAD_A1" data-kind="breaker" data-object="LOAD_A1" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="480" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_A1_BODY" class="cb-body" x="496" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="472" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="510" y="783"/>
+    <rect class="priority-chip" x="478" y="838" width="18" height="18" rx="5"/><text x="487" y="851" class="priority" text-anchor="middle">1</text>
+    <text x="510" y="850" class="label" text-anchor="middle">A1</text>
+    <text id="MW_LOAD_A1" x="510" y="872" class="mw" text-anchor="middle">42 MW</text>
+    <text id="ARM_LOAD_A1" x="510" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_A2" data-kind="load" data-object="LOAD_A2" data-priority="1" data-mw="38" data-state="in-service">
+    <line class="tap" x1="585" y1="760" x2="585" y2="812"/>
+    <g id="CB_LOAD_A2" data-kind="breaker" data-object="LOAD_A2" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="555" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_A2_BODY" class="cb-body" x="571" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="547" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="585" y="783"/>
+    <rect class="priority-chip" x="553" y="838" width="18" height="18" rx="5"/><text x="562" y="851" class="priority" text-anchor="middle">1</text>
+    <text x="585" y="850" class="label" text-anchor="middle">A2</text>
+    <text id="MW_LOAD_A2" x="585" y="872" class="mw" text-anchor="middle">38 MW</text>
+    <text id="ARM_LOAD_A2" x="585" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_A3" data-kind="load" data-object="LOAD_A3" data-priority="2" data-mw="52" data-state="in-service">
+    <line class="tap" x1="660" y1="760" x2="660" y2="812"/>
+    <g id="CB_LOAD_A3" data-kind="breaker" data-object="LOAD_A3" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="630" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_A3_BODY" class="cb-body" x="646" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="622" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="660" y="783"/>
+    <rect class="priority-chip" x="628" y="838" width="18" height="18" rx="5"/><text x="637" y="851" class="priority" text-anchor="middle">2</text>
+    <text x="660" y="850" class="label" text-anchor="middle">A3</text>
+    <text id="MW_LOAD_A3" x="660" y="872" class="mw" text-anchor="middle">52 MW</text>
+    <text id="ARM_LOAD_A3" x="660" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_A4" data-kind="load" data-object="LOAD_A4" data-priority="3" data-mw="24" data-state="in-service">
+    <line class="tap" x1="735" y1="760" x2="735" y2="812"/>
+    <g id="CB_LOAD_A4" data-kind="breaker" data-object="LOAD_A4" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="705" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_A4_BODY" class="cb-body" x="721" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="697" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="735" y="783"/>
+    <rect class="priority-chip" x="703" y="838" width="18" height="18" rx="5"/><text x="712" y="851" class="priority" text-anchor="middle">3</text>
+    <text x="735" y="850" class="label" text-anchor="middle">A4</text>
+    <text id="MW_LOAD_A4" x="735" y="872" class="mw" text-anchor="middle">24 MW</text>
+    <text id="ARM_LOAD_A4" x="735" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_A5" class="svg-blocked" data-kind="load" data-object="LOAD_A5" data-priority="4" data-mw="18" data-state="blocked">
+    <line class="tap" x1="790" y1="760" x2="790" y2="812"/>
+    <g id="CB_LOAD_A5" data-kind="breaker" data-object="LOAD_A5" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="760" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_A5_BODY" class="cb-body" x="776" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="752" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="790" y="783"/>
+    <rect class="priority-chip" x="758" y="838" width="18" height="18" rx="5"/><text x="767" y="851" class="priority" text-anchor="middle">4</text>
+    <text x="790" y="850" class="label" text-anchor="middle">A5</text>
+    <text id="MW_LOAD_A5" x="790" y="872" class="mw" text-anchor="middle">18 MW</text>
+    <text id="ARM_LOAD_A5" x="790" y="886" class="arm-text" text-anchor="middle">BLOCK</text>
+  </g>
+
+  <g id="LOAD_B1" data-kind="load" data-object="LOAD_B1" data-priority="1" data-mw="44" data-state="in-service">
+    <line class="tap" x1="585" y1="413" x2="585" y2="482"/>
+    <g id="CB_LOAD_B1" data-kind="breaker" data-object="LOAD_B1" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="555" y="426" width="60" height="56"/>
+      <rect id="CB_LOAD_B1_BODY" class="cb-body" x="571" y="440" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="547" y="500" width="76" height="62"/>
+    <use href="#loadSymbol" x="585" y="453"/>
+    <rect class="priority-chip" x="553" y="508" width="18" height="18" rx="5"/><text x="562" y="521" class="priority" text-anchor="middle">1</text>
+    <text x="585" y="520" class="label" text-anchor="middle">B1</text>
+    <text id="MW_LOAD_B1" x="585" y="542" class="mw" text-anchor="middle">44 MW</text>
+    <text id="ARM_LOAD_B1" x="585" y="556" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_B3" data-kind="load" data-object="LOAD_B3" data-priority="1" data-mw="31" data-state="in-service">
+    <line class="tap" x1="680" y1="413" x2="680" y2="482"/>
+    <g id="CB_LOAD_B3" data-kind="breaker" data-object="LOAD_B3" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="650" y="426" width="60" height="56"/>
+      <rect id="CB_LOAD_B3_BODY" class="cb-body" x="666" y="440" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="642" y="500" width="76" height="62"/>
+    <use href="#loadSymbol" x="680" y="453"/>
+    <rect class="priority-chip" x="648" y="508" width="18" height="18" rx="5"/><text x="657" y="521" class="priority" text-anchor="middle">1</text>
+    <text x="680" y="520" class="label" text-anchor="middle">B3</text>
+    <text id="MW_LOAD_B3" x="680" y="542" class="mw" text-anchor="middle">31 MW</text>
+    <text id="ARM_LOAD_B3" x="680" y="556" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_B4" data-kind="load" data-object="LOAD_B4" data-priority="3" data-mw="21" data-state="in-service">
+    <line class="tap" x1="760" y1="413" x2="760" y2="482"/>
+    <g id="CB_LOAD_B4" data-kind="breaker" data-object="LOAD_B4" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="730" y="426" width="60" height="56"/>
+      <rect id="CB_LOAD_B4_BODY" class="cb-body" x="746" y="440" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="722" y="500" width="76" height="62"/>
+    <use href="#loadSymbol" x="760" y="453"/>
+    <rect class="priority-chip" x="728" y="508" width="18" height="18" rx="5"/><text x="737" y="521" class="priority" text-anchor="middle">3</text>
+    <text x="760" y="520" class="label" text-anchor="middle">B4</text>
+    <text id="MW_LOAD_B4" x="760" y="542" class="mw" text-anchor="middle">21 MW</text>
+    <text id="ARM_LOAD_B4" x="760" y="556" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_B5" class="svg-blocked" data-kind="load" data-object="LOAD_B5" data-priority="4" data-mw="16" data-state="blocked">
+    <line class="tap" x1="840" y1="413" x2="840" y2="482"/>
+    <g id="CB_LOAD_B5" data-kind="breaker" data-object="LOAD_B5" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="810" y="426" width="60" height="56"/>
+      <rect id="CB_LOAD_B5_BODY" class="cb-body" x="826" y="440" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="802" y="500" width="76" height="62"/>
+    <use href="#loadSymbol" x="840" y="453"/>
+    <rect class="priority-chip" x="808" y="508" width="18" height="18" rx="5"/><text x="817" y="521" class="priority" text-anchor="middle">4</text>
+    <text x="840" y="520" class="label" text-anchor="middle">B5</text>
+    <text id="MW_LOAD_B5" x="840" y="542" class="mw" text-anchor="middle">16 MW</text>
+    <text id="ARM_LOAD_B5" x="840" y="556" class="arm-text" text-anchor="middle">BLOCK</text>
+  </g>
+  <g id="LOAD_B2" data-kind="load" data-object="LOAD_B2" data-priority="2" data-mw="36" data-state="in-service">
+    <line class="tap" x1="930" y1="413" x2="930" y2="482"/>
+    <g id="CB_LOAD_B2" data-kind="breaker" data-object="LOAD_B2" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="900" y="426" width="60" height="56"/>
+      <rect id="CB_LOAD_B2_BODY" class="cb-body" x="916" y="440" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="892" y="500" width="76" height="62"/>
+    <use href="#loadSymbol" x="930" y="453"/>
+    <rect class="priority-chip" x="898" y="508" width="18" height="18" rx="5"/><text x="907" y="521" class="priority" text-anchor="middle">2</text>
+    <text x="930" y="520" class="label" text-anchor="middle">B2</text>
+    <text id="MW_LOAD_B2" x="930" y="542" class="mw" text-anchor="middle">36 MW</text>
+    <text id="ARM_LOAD_B2" x="930" y="556" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+
+  <g id="LOAD_C4" data-kind="load" data-object="LOAD_C4" data-priority="3" data-mw="26" data-state="in-service">
+    <line class="tap" x1="1510" y1="760" x2="1510" y2="812"/>
+    <g id="CB_LOAD_C4" data-kind="breaker" data-object="LOAD_C4" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="1480" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_C4_BODY" class="cb-body" x="1496" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="1472" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="1510" y="783"/>
+    <rect class="priority-chip" x="1478" y="838" width="18" height="18" rx="5"/><text x="1487" y="851" class="priority" text-anchor="middle">3</text>
+    <text x="1510" y="850" class="label" text-anchor="middle">C4</text>
+    <text id="MW_LOAD_C4" x="1510" y="872" class="mw" text-anchor="middle">26 MW</text>
+    <text id="ARM_LOAD_C4" x="1510" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_C3" data-kind="load" data-object="LOAD_C3" data-priority="2" data-mw="34" data-state="in-service">
+    <line class="tap" x1="1585" y1="760" x2="1585" y2="812"/>
+    <g id="CB_LOAD_C3" data-kind="breaker" data-object="LOAD_C3" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="1555" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_C3_BODY" class="cb-body" x="1571" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="1547" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="1585" y="783"/>
+    <rect class="priority-chip" x="1553" y="838" width="18" height="18" rx="5"/><text x="1562" y="851" class="priority" text-anchor="middle">2</text>
+    <text x="1585" y="850" class="label" text-anchor="middle">C3</text>
+    <text id="MW_LOAD_C3" x="1585" y="872" class="mw" text-anchor="middle">34 MW</text>
+    <text id="ARM_LOAD_C3" x="1585" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_C1" data-kind="load" data-object="LOAD_C1" data-priority="1" data-mw="46" data-state="in-service">
+    <line class="tap" x1="1660" y1="760" x2="1660" y2="812"/>
+    <g id="CB_LOAD_C1" data-kind="breaker" data-object="LOAD_C1" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="1630" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_C1_BODY" class="cb-body" x="1646" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="1622" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="1660" y="783"/>
+    <rect class="priority-chip" x="1628" y="838" width="18" height="18" rx="5"/><text x="1637" y="851" class="priority" text-anchor="middle">1</text>
+    <text x="1660" y="850" class="label" text-anchor="middle">C1</text>
+    <text id="MW_LOAD_C1" x="1660" y="872" class="mw" text-anchor="middle">46 MW</text>
+    <text id="ARM_LOAD_C1" x="1660" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_C2" data-kind="load" data-object="LOAD_C2" data-priority="1" data-mw="40" data-state="in-service">
+    <line class="tap" x1="1735" y1="760" x2="1735" y2="812"/>
+    <g id="CB_LOAD_C2" data-kind="breaker" data-object="LOAD_C2" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="1705" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_C2_BODY" class="cb-body" x="1721" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="1697" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="1735" y="783"/>
+    <rect class="priority-chip" x="1703" y="838" width="18" height="18" rx="5"/><text x="1712" y="851" class="priority" text-anchor="middle">1</text>
+    <text x="1735" y="850" class="label" text-anchor="middle">C2</text>
+    <text id="MW_LOAD_C2" x="1735" y="872" class="mw" text-anchor="middle">40 MW</text>
+    <text id="ARM_LOAD_C2" x="1735" y="886" class="arm-text" text-anchor="middle">ARM</text>
+  </g>
+  <g id="LOAD_C5" class="svg-blocked" data-kind="load" data-object="LOAD_C5" data-priority="4" data-mw="18" data-state="blocked">
+    <line class="tap" x1="1790" y1="760" x2="1790" y2="812"/>
+    <g id="CB_LOAD_C5" data-kind="breaker" data-object="LOAD_C5" data-role="open-close" data-state="closed">
+      <rect class="hit-target" x="1760" y="764" width="60" height="56"/>
+      <rect id="CB_LOAD_C5_BODY" class="cb-body" x="1776" y="778" width="28" height="28"/>
+    </g>
+    <rect class="load-card" x="1752" y="830" width="76" height="62"/>
+    <use href="#loadSymbol" x="1790" y="783"/>
+    <rect class="priority-chip" x="1758" y="838" width="18" height="18" rx="5"/><text x="1767" y="851" class="priority" text-anchor="middle">4</text>
+    <text x="1790" y="850" class="label" text-anchor="middle">C5</text>
+    <text id="MW_LOAD_C5" x="1790" y="872" class="mw" text-anchor="middle">18 MW</text>
+    <text id="ARM_LOAD_C5" x="1790" y="886" class="arm-text" text-anchor="middle">BLOCK</text>
+  </g>
+
+  <g id="ARMING_SUMMARY" data-kind="arming-summary">
+    <rect class="panel" x="72" y="132" width="316" height="112" rx="16"/>
+    <text x="92" y="164" class="label">Adaptive Arming Matrix</text>
+    <text id="ARMING_RULE_1" x="92" y="188" class="subtle">Priority first, then minimum total MW combination</text>
+    <text id="ARMING_RULE_2" x="92" y="210" class="subtle">Breaker failure: recalculate alternative live loads</text>
+    <text id="ARMING_TOTAL" x="92" y="232" class="mw">Selected shedding: 0 MW</text>
+  </g>
+</svg>
