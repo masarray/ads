@@ -1,6 +1,6 @@
 # GridDefense ADS Simulator
 
-Adaptive Defense Scheme simulator for an operator-style HMI Single Line Diagram.
+Adaptive Defense Scheme Logic simulator for an operator-style HMI Single Line Diagram.
 
 The active web app is intentionally kept as a static site in `codex/`:
 
