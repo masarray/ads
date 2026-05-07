@@ -53,10 +53,10 @@ button {
   background: rgba(17, 28, 25, 0.92);
   border-bottom: 1px solid var(--m3-outline);
   display: flex;
-  gap: 12px;
+  gap: 10px;
   min-height: 56px;
-  overflow-x: auto;
-  padding: 8px 16px;
+  overflow: visible;
+  padding: 8px 14px;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -66,7 +66,9 @@ button {
   align-items: center;
   display: flex;
   gap: 10px;
+  border-right: 1px solid var(--m3-outline);
   min-width: 240px;
+  padding-right: 14px;
 }
 
 .brand-mark {
@@ -86,6 +88,11 @@ button {
   font-size: 15px;
   line-height: 1.1;
   margin: 0;
+  white-space: nowrap;
+}
+
+.brand-lockup p {
+  white-space: nowrap;
 }
 
 .brand-lockup p,
@@ -120,12 +127,18 @@ button {
   border: 1px solid var(--m3-outline);
   color: var(--m3-text);
   cursor: pointer;
+  gap: 8px;
   font-weight: 800;
   font-size: 13px;
   transition:
     background 180ms ease,
     border-color 180ms ease,
     transform 180ms ease;
+}
+
+.command-button svg {
+  color: var(--m3-primary);
+  flex: 0 0 auto;
 }
 
 .command-button:hover {
@@ -137,6 +150,119 @@ button {
   background: var(--m3-primary);
   border-color: transparent;
   color: var(--m3-primary-ink);
+}
+
+.command-button.primary svg {
+  color: var(--m3-primary-ink);
+}
+
+.frequency-control {
+  position: relative;
+}
+
+.frequency-popover {
+  background: var(--m3-surface-high);
+  border: 1px solid var(--m3-outline);
+  border-radius: 12px;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.38);
+  display: grid;
+  gap: 12px;
+  left: 0;
+  min-width: 288px;
+  padding: 12px 14px;
+  position: absolute;
+  top: 44px;
+  z-index: 40;
+}
+
+.frequency-popover header {
+  align-items: center;
+  border-bottom: 1px solid var(--m3-outline);
+  display: flex;
+  gap: 8px;
+  margin: -12px -14px 0;
+  padding: 12px 14px 10px;
+}
+
+.frequency-popover header svg {
+  color: var(--m3-primary);
+}
+
+.freq-scale {
+  align-items: center;
+  color: var(--m3-muted);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+}
+
+.freq-scale b {
+  color: var(--m3-text);
+}
+
+.frequency-popover input {
+  accent-color: var(--m3-primary);
+  width: 100%;
+}
+
+.freq-presets {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.freq-presets button {
+  background: #10201c;
+  border: 1px solid var(--m3-outline);
+  border-radius: 999px;
+  color: var(--m3-text);
+  cursor: pointer;
+  font-size: 11px;
+  min-height: 30px;
+}
+
+.freq-inject {
+  background: var(--m3-primary);
+  border: 0;
+  border-radius: 999px;
+  color: var(--m3-primary-ink);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 38px;
+}
+
+.system-strip {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  min-width: max-content;
+}
+
+.system-strip div {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--m3-outline);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.system-strip svg {
+  color: var(--m3-primary);
+}
+
+.system-strip span {
+  color: var(--m3-muted);
+  font-size: 11px;
+}
+
+.system-strip strong {
+  color: var(--m3-primary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .state-pill {
@@ -405,6 +531,34 @@ button {
 .logic-why div {
   display: grid;
   gap: 5px;
+}
+
+.logic-reject-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.logic-reject-list li {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+}
+
+.logic-reject-list b {
+  color: var(--m3-text);
+  font-size: 11px;
+}
+
+.logic-reject-list span {
+  color: var(--m3-muted);
+  font-size: 11px;
+  line-height: 1.28;
 }
 
 .logic-footer {

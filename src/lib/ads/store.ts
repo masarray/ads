@@ -111,12 +111,12 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
   },
   setHoverObject: (hoverObjectId) => {
     if (get().hoverObjectId === hoverObjectId) return;
-    const hasOpenContingency = Object.entries(get().objectStates).some(
-      ([id, state]) => isContingencyObject(id) && state === "open"
+    const isOpenContingency = Boolean(
+      hoverObjectId && isContingencyObject(hoverObjectId) && get().objectStates[hoverObjectId] === "open"
     );
     set({
       hoverObjectId,
-      hoverDecision: hasOpenContingency ? null : previewDecisionForObject(hoverObjectId, get().feeders)
+      hoverDecision: isOpenContingency ? get().decision : previewDecisionForObject(hoverObjectId, get().feeders)
     });
   }
 }));

@@ -219,7 +219,7 @@ export function SldCanvas() {
 
     for (const feeder of feeders) {
       setText(`MW_${feeder.id}`, `${feeder.breakerState === "closed" ? feeder.mw : 0} MW`);
-      if (hoverDecision && selectedIds.has(feeder.id)) {
+      if (hoverDecision && hoverDecision.status !== "executed" && selectedIds.has(feeder.id)) {
         root.querySelectorAll(`[data-object="${CSS.escape(feeder.id)}"]`).forEach((node) => {
           node.classList.add("svg-armed", "svg-selected");
         });

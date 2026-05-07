@@ -4,16 +4,26 @@ import { useAdsStore } from "../../lib/ads/store";
 export function ReasoningRail() {
   const { decision, hoverDecision, requiredReliefMw, setRequiredReliefMw, feeders } = useAdsStore();
   const displayDecision = hoverDecision ?? decision;
-  const hasLiveDecision = !hoverDecision && (decision.status === "executed" || decision.status === "armed" || decision.status === "blocked");
+  const hasLiveDecision = !hoverDecision && decision.status === "armed";
   const hasDecisionView = Boolean(hoverDecision || hasLiveDecision);
-  const displayMode = hoverDecision ? "Contingency Preview" : hasLiveDecision ? "Live ADS Execution" : "Operator Guide";
+  const isExecuted = hoverDecision?.status === "executed";
+  const displayMode = hoverDecision
+    ? hoverDecision.status === "executed"
+      ? "Trip History"
+      : "Contingency Preview"
+    : hasLiveDecision
+      ? "Manual Pre-arm"
+      : "Operator Guide";
   const displayRequired = hasDecisionView ? displayDecision.requiredReliefMw : requiredReliefMw;
+  const remainingNeed = isExecuted ? 0 : displayRequired;
   const totalLoad = feeders.filter((feeder) => feeder.breakerState === "closed").reduce((sum, feeder) => sum + feeder.mw, 0);
   const selectedNames = displayDecision.selected?.feeders.map((feeder) => feeder.name).join(" + ") ?? "No target armed";
   const selectedMw = displayDecision.selected?.selectedMw ?? 0;
   const overshed = displayDecision.selected?.overshedMw ?? 0;
   const operations = displayDecision.selected?.feeders.length ?? 0;
   const firstAlternative = displayDecision.alternatives[0];
+  const rejectedCount = displayDecision.alternatives.length + displayDecision.rejected.length;
+  const rejectedToShow = [...displayDecision.alternatives, ...displayDecision.rejected].slice(0, 3);
 
   return (
     <aside className="side-rail" aria-label="ADS decision reasoning">
@@ -40,16 +50,16 @@ export function ReasoningRail() {
       {hasDecisionView ? (
         <section className="logic-scoreboard" aria-label="Shedding summary">
         <div>
-          <small>Need</small>
-          <b>{displayRequired}<span>MW</span></b>
+          <small>{isExecuted ? "Remain" : "Need"}</small>
+          <b>{remainingNeed}<span>MW</span></b>
         </div>
         <div>
-          <small>Shed</small>
+          <small>{isExecuted ? "Tripped" : "Shed"}</small>
           <b>{selectedMw}<span>MW</span></b>
         </div>
         <div>
-          <small>Over</small>
-          <b>{overshed}<span>MW</span></b>
+          <small>{isExecuted ? "Cleared" : "Over"}</small>
+          <b>{isExecuted ? displayRequired : overshed}<span>MW</span></b>
         </div>
         <div>
           <small>CB</small>
@@ -82,11 +92,13 @@ export function ReasoningRail() {
       {hasDecisionView ? (
         <>
           <section className="logic-target" data-active={displayDecision.selected ? "true" : "false"}>
-            <small>Selected Target</small>
+            <small>{isExecuted ? "Armed and Tripped" : "Selected Target"}</small>
             <h3>{selectedNames}</h3>
             <p>
               {displayDecision.selected
-                ? displayDecision.selected.reason
+                ? isExecuted
+                  ? `${selectedNames} sudah dikirim trip. Relief awal ${displayRequired} MW sudah terpenuhi; tidak ada arming tambahan yang diperlukan.`
+                  : displayDecision.selected.reason
                 : "Tidak ada shedding karena sistem masih aman atau belum ada constraint aktif."}
             </p>
           </section>
@@ -104,10 +116,20 @@ export function ReasoningRail() {
               <small>Why Not Other</small>
               <p>
                 {firstAlternative
-                  ? `${firstAlternative.feeders.map((feeder) => feeder.name).join(" + ")}: ${firstAlternative.rejection ?? `score lebih buruk, overshed ${firstAlternative.overshedMw} MW.`}`
+                  ? `${rejectedCount} kandidat lain ditolak. ${firstAlternative.feeders.map((feeder) => feeder.name).join(" + ")}: ${firstAlternative.rejection ?? `score lebih buruk, overshed ${firstAlternative.overshedMw} MW.`}`
                   : "Tidak ada alternatif yang perlu dibandingkan saat sistem normal."}
               </p>
             </div>
+            {rejectedToShow.length > 1 ? (
+              <ul className="logic-reject-list">
+                {rejectedToShow.slice(1).map((candidate) => (
+                  <li key={candidate.id}>
+                    <b>{candidate.feeders.map((feeder) => feeder.name).join(" + ")}</b>
+                    <span>{candidate.rejection ?? `Overshed ${candidate.overshedMw} MW atau score lebih buruk.`}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section>
         </>
       ) : (
