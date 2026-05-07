@@ -4,6 +4,3 @@ dist/
 .env
 .env.*
 *.log
-codex/server.out.log
-codex/server.err.log
-
