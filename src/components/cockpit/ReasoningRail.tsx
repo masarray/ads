@@ -37,7 +37,7 @@ export function ReasoningRail() {
         </div>
       </section>
 
-      <section className="logic-hero">
+      <section className="logic-hero logic-animated" key={`hero-${displayMode}-${displayDecision.title ?? "guide"}`}>
         <small>{hasDecisionView ? displayDecision.mode : "SMART LOAD SHEDDING"}</small>
         <h2>{hasDecisionView ? displayDecision.title : "How ADS Brain Chooses"}</h2>
         <p className="rail-copy">
@@ -48,7 +48,7 @@ export function ReasoningRail() {
       </section>
 
       {hasDecisionView ? (
-        <section className="logic-scoreboard" aria-label="Shedding summary">
+        <section className="logic-scoreboard logic-animated" aria-label="Shedding summary" key={`score-${displayDecision.constraint}-${displayDecision.status}`}>
         <div>
           <small>{isExecuted ? "Remain" : "Need"}</small>
           <b>{remainingNeed}<span>MW</span></b>
@@ -67,7 +67,7 @@ export function ReasoningRail() {
         </div>
         </section>
       ) : (
-        <section className="logic-guide-grid" aria-label="ADS logic guide">
+        <section className="logic-guide-grid logic-animated" aria-label="ADS logic guide">
           <div><small>1 Detect</small><p>Temukan constraint: overload, islanding, defisit generator, atau transfer IBT/line.</p></div>
           <div><small>2 Localize</small><p>Prioritaskan load di bus/area yang benar-benar menurunkan arus constraint.</p></div>
           <div><small>3 Optimize</small><p>Ranking kombinasi berdasarkan lost MW, overshed, prioritas, dan jumlah operasi CB.</p></div>
@@ -91,7 +91,7 @@ export function ReasoningRail() {
 
       {hasDecisionView ? (
         <>
-          <section className="logic-target" data-active={displayDecision.selected ? "true" : "false"}>
+          <section className="logic-target logic-animated" data-active={displayDecision.selected ? "true" : "false"} key={`target-${selectedNames}`}>
             <small>{isExecuted ? "Armed and Tripped" : "Selected Target"}</small>
             <h3>{selectedNames}</h3>
             <p>
@@ -103,7 +103,7 @@ export function ReasoningRail() {
             </p>
           </section>
 
-          <section className="logic-why">
+          <section className="logic-why logic-animated" key={`why-${displayDecision.constraint}-${selectedNames}`}>
             <div>
               <small>Why Accepted</small>
               <p>
@@ -133,7 +133,7 @@ export function ReasoningRail() {
           </section>
         </>
       ) : (
-        <section className="logic-target" data-active="true">
+        <section className="logic-target logic-animated" data-active="true">
           <small>What to Try</small>
           <h3>Hover contingency CB</h3>
           <p>Contoh: arahkan mouse ke IBT A, IBT C, CB line, coupler, atau generator. Load biasa hanya bisa diklik Open/Close dan tidak akan memicu arming.</p>

@@ -53,6 +53,9 @@ const objectMwText: Record<string, string> = {
 
 export function SldCanvas() {
   const hostRef = useRef<HTMLDivElement>(null);
+  const hoverCommitTimerRef = useRef<number | null>(null);
+  const hoverClearTimerRef = useRef<number | null>(null);
+  const lastHoverObjectRef = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; body: string } | null>(null);
   const feeders = useAdsStore((state) => state.feeders);
@@ -84,6 +87,8 @@ export function SldCanvas() {
 
     return () => {
       mounted = false;
+      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
     };
   }, []);
 
@@ -123,17 +128,33 @@ export function SldCanvas() {
       const objectId = node?.getAttribute("data-object") ?? node?.id;
       if (!objectId) {
         setTooltip(null);
-        setHoverObject(null);
+        if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+        if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+        hoverClearTimerRef.current = window.setTimeout(() => {
+          lastHoverObjectRef.current = null;
+          setHoverObject(null);
+        }, 180);
         return;
       }
+      if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
       const copy = describe(objectId);
-      setHoverObject(objectId);
       setTooltip({ x: event.clientX, y: event.clientY, ...copy });
+      if (lastHoverObjectRef.current === objectId) return;
+      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      hoverCommitTimerRef.current = window.setTimeout(() => {
+        lastHoverObjectRef.current = objectId;
+        setHoverObject(objectId);
+      }, 120);
     };
 
     const onPointerLeave = () => {
       setTooltip(null);
-      setHoverObject(null);
+      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+      hoverClearTimerRef.current = window.setTimeout(() => {
+        lastHoverObjectRef.current = null;
+        setHoverObject(null);
+      }, 220);
     };
 
     host.addEventListener("click", onClick);
