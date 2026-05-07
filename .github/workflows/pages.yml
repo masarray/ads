@@ -24,11 +24,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare static site
-        run: |
-          mkdir -p _site
-          cp -R codex/. _site/
-          touch _site/.nojekyll
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build React app
+        run: pnpm run build
+
+      - name: Prepare Pages artifact
+        run: touch dist/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -36,7 +48,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment

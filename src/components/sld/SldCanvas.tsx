@@ -70,7 +70,7 @@ export function SldCanvas() {
   useEffect(() => {
     let mounted = true;
 
-    fetch("/assets/SLD_ADS_HMI.svg")
+    fetch(`${import.meta.env.BASE_URL}assets/SLD_ADS_HMI.svg`)
       .then((response) => response.text())
       .then((markup) => {
         if (mounted && hostRef.current) {
