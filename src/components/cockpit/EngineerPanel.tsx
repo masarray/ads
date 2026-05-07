@@ -1,7 +1,9 @@
-import { AlertTriangle, BadgeCheck, ListChecks, MousePointer2 } from "lucide-react";
+import { AlertTriangle, BadgeCheck, ChevronDown, ListChecks, MousePointer2 } from "lucide-react";
+import { useState } from "react";
 import { useAdsStore } from "../../lib/ads/store";
 
 export function EngineerPanel() {
+  const [open, setOpen] = useState(false);
   const eventLog = useAdsStore((state) => state.eventLog);
   const decision = useAdsStore((state) => state.decision);
   const feeders = useAdsStore((state) => state.feeders);
@@ -9,10 +11,20 @@ export function EngineerPanel() {
   const lastDecision = decision.selected?.feeders.map((feeder) => feeder.name).join(" + ") ?? "No trip executed";
 
   return (
-    <section className="engineer-panel" aria-label="Engineer drawer">
+    <section className={`engineer-panel ${open ? "is-open" : ""}`} aria-label="Engineer drawer">
       <header className="engineer-title">
-        <ListChecks size={16} />
-        <strong>Engineer Drawer</strong>
+        <button
+          aria-expanded={open}
+          className="engineer-toggle"
+          onClick={() => setOpen((value) => !value)}
+          type="button"
+        >
+          <ListChecks size={16} />
+          <strong>Engineer Drawer</strong>
+          <span>{openFeeders.length} open</span>
+          <span>{eventLog.length} events</span>
+          <ChevronDown size={16} />
+        </button>
       </header>
       <div className="engineer-grid">
         <article>
