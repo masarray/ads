@@ -116,9 +116,12 @@ export function SldCanvas() {
 
     const onClick = (event: MouseEvent) => {
       const target = event.target as Element;
-      const node = target.closest<SVGElement>("[data-object]");
+      const node = target.closest<SVGElement>("[data-role='open-close']");
       const objectId = node?.getAttribute("data-object") ?? node?.id;
       if (!objectId) return;
+      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      lastHoverObjectRef.current = objectId;
+      setHoverObject(objectId);
       toggleObject(objectId);
     };
 
@@ -141,6 +144,8 @@ export function SldCanvas() {
       setTooltip({ x: event.clientX, y: event.clientY, ...copy });
       if (lastHoverObjectRef.current === objectId) return;
       if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      lastHoverObjectRef.current = null;
+      setHoverObject(null);
       hoverCommitTimerRef.current = window.setTimeout(() => {
         lastHoverObjectRef.current = objectId;
         setHoverObject(objectId);

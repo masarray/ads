@@ -88,14 +88,19 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     let decision = decisionForOpenContingencies(objectStates, feeders) ?? rankShedding(feeders, get().requiredReliefMw);
     const eventItems = [`${objectId} ${next === "closed" ? "closed/energized" : "opened/dead"}.`];
 
-    if (next === "open" && isContingencyObject(objectId) && decision.selected) {
-      const selectedIds = new Set(decision.selected.feeders.map((feeder) => feeder.id));
-      feeders = feeders.map((feeder) => selectedIds.has(feeder.id) ? { ...feeder, breakerState: "open" as BreakerState } : feeder);
-      for (const feeder of decision.selected.feeders) {
-        objectStates[feeder.id] = "open";
-        eventItems.push(`ADS trip command: ${feeder.id} opened for ${decision.constraint}.`);
+    if (next === "open" && isContingencyObject(objectId)) {
+      const clickedDecision = previewDecisionForObject(objectId, feeders);
+      if (clickedDecision?.selected) {
+        const selectedIds = new Set(clickedDecision.selected.feeders.map((feeder) => feeder.id));
+        feeders = feeders.map((feeder) => selectedIds.has(feeder.id) ? { ...feeder, breakerState: "open" as BreakerState } : feeder);
+        for (const feeder of clickedDecision.selected.feeders) {
+          objectStates[feeder.id] = "open";
+          eventItems.push(`ADS trip command: ${feeder.id} opened for ${clickedDecision.constraint}.`);
+        }
+        decision = { ...clickedDecision, status: "executed", mode: "LIVE ADS EXECUTION" };
+      } else if (clickedDecision) {
+        decision = { ...clickedDecision, status: "blocked", mode: "LIVE ADS EXECUTION" };
       }
-      decision = { ...decision, status: "executed" };
     }
 
     set({
