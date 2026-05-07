@@ -2,10 +2,16 @@
   "name": "griddefense-ads-simulator",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.23.0",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
