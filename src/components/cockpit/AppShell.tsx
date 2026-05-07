@@ -10,6 +10,7 @@ import {
   Zap
 } from "lucide-react";
 import { ReasoningRail } from "./ReasoningRail";
+import { EngineerPanel } from "./EngineerPanel";
 import { SldCanvas } from "../sld/SldCanvas";
 import { useAdsStore } from "../../lib/ads/store";
 
@@ -124,7 +125,10 @@ export function AppShell() {
       </header>
 
       <div className="workspace">
-        <SldCanvas />
+        <div className="main-column">
+          <SldCanvas />
+          <EngineerPanel />
+        </div>
         <ReasoningRail />
       </div>
     </main>

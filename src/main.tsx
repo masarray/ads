@@ -21,7 +21,10 @@ const indexRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([indexRoute]);
-const router = createRouter({ routeTree });
+const router = createRouter({
+  routeTree,
+  basepath: import.meta.env.PROD ? "/grifdefense-ads-simulator" : "/"
+});
 
 declare module "@tanstack/react-router" {
   interface Register {
