@@ -327,6 +327,7 @@ button {
   min-height: 0;
   overflow: auto;
   position: relative;
+  scrollbar-color: rgba(110, 219, 208, 0.45) rgba(255, 255, 255, 0.08);
 }
 
 .engineer-panel {
@@ -464,18 +465,91 @@ button {
 
 .sld-canvas {
   min-height: 100%;
-  min-width: 1920px;
-  padding: 0;
-  width: max(100%, 1920px);
+  min-width: 100%;
+  position: relative;
 }
 
-.sld-canvas svg {
+.sld-scale-layer {
+  height: 1080px;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transform-origin: top left;
+  width: 1920px;
+}
+
+.sld-scale-layer svg {
   display: block;
   height: auto;
   overflow: visible;
   shape-rendering: geometricPrecision;
   text-rendering: geometricPrecision;
   width: 1920px;
+}
+
+.sld-zoom-toolbar {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  background: rgba(9, 17, 15, 0.76);
+  border: 1px solid rgba(171, 205, 195, 0.26);
+  border-radius: 999px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  display: flex;
+  gap: 6px;
+  left: 16px;
+  padding: 6px;
+  position: sticky;
+  top: 14px;
+  width: max-content;
+  z-index: 20;
+}
+
+.sld-zoom-toolbar button,
+.sld-zoom-toolbar span {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 6px;
+  height: 30px;
+  justify-content: center;
+  min-width: 30px;
+}
+
+.sld-zoom-toolbar button {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(171, 205, 195, 0.16);
+  color: var(--m3-text);
+  cursor: pointer;
+  padding: 0 10px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.sld-zoom-toolbar button:first-child {
+  color: var(--m3-primary);
+  min-width: 66px;
+}
+
+.sld-zoom-toolbar button:hover {
+  background: rgba(110, 219, 208, 0.14);
+  border-color: rgba(110, 219, 208, 0.42);
+  transform: translateY(-1px);
+}
+
+.sld-zoom-toolbar svg {
+  color: var(--m3-primary);
+}
+
+.sld-zoom-toolbar span {
+  background: rgba(110, 219, 208, 0.12);
+  border: 1px solid rgba(110, 219, 208, 0.26);
+  color: var(--m3-primary);
+  min-width: 54px;
+  padding: 0 9px;
 }
 
 .side-rail {

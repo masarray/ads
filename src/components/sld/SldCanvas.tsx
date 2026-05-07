@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minus, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdsStore } from "../../lib/ads/store";
 
 const feederElementMap: Record<string, string[]> = {
@@ -51,12 +52,21 @@ const objectMwText: Record<string, string> = {
   GEN_C2: "145 MW"
 };
 
+const sldNativeWidth = 1920;
+const sldNativeHeight = 1080;
+const minZoom = 0.45;
+const maxZoom = 1.35;
+
 export function SldCanvas() {
+  const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const hoverCommitTimerRef = useRef<number | null>(null);
   const hoverClearTimerRef = useRef<number | null>(null);
   const lastHoverObjectRef = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [fitZoom, setFitZoom] = useState(0.7);
+  const [zoom, setZoom] = useState(0.7);
+  const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
   const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; body: string } | null>(null);
   const feeders = useAdsStore((state) => state.feeders);
   const contingencyRules = useAdsStore((state) => state.contingencyRules);
@@ -70,6 +80,55 @@ export function SldCanvas() {
     () => new Set((hoverDecision ?? decision).selected?.feeders.map((feeder) => feeder.id) ?? []),
     [decision, hoverDecision]
   );
+  const clampedZoom = Math.min(maxZoom, Math.max(minZoom, zoom));
+  const canvasWidth = sldNativeWidth * clampedZoom;
+  const canvasHeight = sldNativeHeight * clampedZoom;
+
+  const fitToStage = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const viewportWidth = Math.max(1, stage.clientWidth - 28);
+    const viewportHeight = Math.max(1, stage.clientHeight - 28);
+    const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.96;
+    const nextZoom = Math.min(maxZoom, Math.max(minZoom, nextFitZoom));
+
+    setFitZoom(nextZoom);
+    setZoom(nextZoom);
+    setZoomMode("fit");
+
+    window.requestAnimationFrame(() => {
+      if (!stageRef.current) return;
+      stageRef.current.scrollLeft = Math.max(0, (sldNativeWidth * nextZoom - stageRef.current.clientWidth) / 2);
+      stageRef.current.scrollTop = Math.max(0, (sldNativeHeight * nextZoom - stageRef.current.clientHeight) / 2);
+    });
+  }, []);
+
+  const setManualZoom = (nextZoom: number) => {
+    setZoomMode("manual");
+    setZoom(Math.min(maxZoom, Math.max(minZoom, nextZoom)));
+  };
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const observer = new ResizeObserver(() => {
+      const viewportWidth = Math.max(1, stage.clientWidth - 28);
+      const viewportHeight = Math.max(1, stage.clientHeight - 28);
+      const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.96;
+      const nextZoom = Math.min(maxZoom, Math.max(minZoom, nextFitZoom));
+      setFitZoom(nextZoom);
+      if (zoomMode === "fit") setZoom(nextZoom);
+    });
+
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [zoomMode]);
+
+  useEffect(() => {
+    if (loaded) fitToStage();
+  }, [fitToStage, loaded]);
 
   useEffect(() => {
     let mounted = true;
@@ -101,8 +160,8 @@ export function SldCanvas() {
     root.setAttribute("preserveAspectRatio", "xMidYMid meet");
     root.setAttribute("shape-rendering", "geometricPrecision");
     root.setAttribute("text-rendering", "geometricPrecision");
-    root.removeAttribute("width");
-    root.removeAttribute("height");
+    root.setAttribute("width", String(sldNativeWidth));
+    root.setAttribute("height", String(sldNativeHeight));
     root.classList.add("ads-sld-svg");
     root.querySelectorAll<SVGGraphicsElement>("[data-role='open-close']").forEach((element) => {
       element.setAttribute("tabindex", "0");
@@ -258,13 +317,33 @@ export function SldCanvas() {
         }
       }
     }
-
-    setText("ARMING_TOTAL", `Selected shedding: ${hoverDecision?.selected?.selectedMw ?? decision.selected?.selectedMw ?? 0} MW`);
   }, [contingencyRules, decision, displayDecision, feeders, hoverDecision, loaded, objectStates, selectedIds]);
 
   return (
-    <section className="sld-stage" aria-label="Single line diagram">
-      <div ref={hostRef} className="sld-canvas" />
+    <section ref={stageRef} className="sld-stage" aria-label="Single line diagram">
+      <div className="sld-zoom-toolbar" aria-label="SLD zoom controls">
+        <button onClick={fitToStage} type="button" title="Fit all">
+          <Maximize2 size={14} />
+          Fit
+        </button>
+        <button onClick={() => setManualZoom(clampedZoom - 0.1)} type="button" title="Zoom out">
+          <Minus size={14} />
+        </button>
+        <span>{Math.round(clampedZoom * 100)}%</span>
+        <button onClick={() => setManualZoom(clampedZoom + 0.1)} type="button" title="Zoom in">
+          <Plus size={14} />
+        </button>
+      </div>
+      <div
+        className="sld-canvas"
+        style={{ height: canvasHeight, width: canvasWidth }}
+      >
+        <div
+          ref={hostRef}
+          className="sld-scale-layer"
+          style={{ transform: `scale(${clampedZoom})` }}
+        />
+      </div>
       {tooltip ? (
         <div className="sld-tooltip" style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}>
           <strong>{tooltip.title}</strong>

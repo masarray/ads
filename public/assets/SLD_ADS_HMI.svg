@@ -111,9 +111,6 @@
       <line id="Line 6_4" x1="320" y1="895" x2="320" y2="767" stroke-width="4" style="stroke-linecap: square; stroke: rgb(255, 0, 0);"/>
     </g>
     <g id="ADS_RUNTIME_TEXT" pointer-events="none">
-      <text id="CONTINGENCY_LABEL" class="runtime-status" x="72" y="86" style="white-space: pre;">Contingency: NONE</text>
-      <text id="FREQUENCY_LABEL" class="runtime-status" x="1848" y="86" text-anchor="end" style="white-space: pre;">50.00 Hz</text>
-      <text id="ARMING_TOTAL" class="runtime-status" x="1848" y="114" text-anchor="end" style="white-space: pre;">Selected shedding: 0 MW</text>
       <text id="MW_LINE_AB" class="runtime-meter" x="395" y="262" text-anchor="middle" style="white-space: pre;">88 MW</text>
       <text id="MW_LINE_BC" class="runtime-meter" x="1062" y="262" text-anchor="middle" style="white-space: pre;">92 MW</text>
       <text id="MW_LINE_AC" class="runtime-meter" x="714" y="184" text-anchor="middle" style="white-space: pre;">70 MW</text>
