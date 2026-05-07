@@ -21,11 +21,17 @@ export interface SheddingCandidate {
   overshedMw: number;
   score: number;
   reason: string;
+  rejection?: string;
 }
 
 export interface AdsDecision {
   status: "normal" | "armed" | "executed" | "blocked";
   requiredReliefMw: number;
+  title?: string;
+  mode?: string;
+  affectedBuses?: Array<Feeder["bus"]>;
+  constraint?: string;
+  explanation?: string;
   selected?: SheddingCandidate;
   alternatives: SheddingCandidate[];
   rejected: SheddingCandidate[];
