@@ -59,6 +59,7 @@ export function SldCanvas() {
   const [loaded, setLoaded] = useState(false);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; body: string } | null>(null);
   const feeders = useAdsStore((state) => state.feeders);
+  const contingencyRules = useAdsStore((state) => state.contingencyRules);
   const objectStates = useAdsStore((state) => state.objectStates);
   const decision = useAdsStore((state) => state.decision);
   const hoverDecision = useAdsStore((state) => state.hoverDecision);
@@ -235,7 +236,8 @@ export function SldCanvas() {
     for (const [objectId, state] of Object.entries(objectStates)) {
       setState(objectId, state === "closed");
       if (objectMwText[objectId]) {
-        setText(`MW_${objectId}`, state === "open" ? "0 MW" : objectMwText[objectId]);
+        const configuredMw = contingencyRules[objectId]?.requiredReliefMw;
+        setText(`MW_${objectId}`, state === "open" ? "0 MW" : `${configuredMw ?? objectMwText[objectId].replace(" MW", "")} MW`);
       }
       if (state === "open") {
         const node = root.querySelector(`[data-role="open-close"][data-object="${CSS.escape(objectId)}"]`);
@@ -256,7 +258,7 @@ export function SldCanvas() {
     }
 
     setText("ARMING_TOTAL", `Selected shedding: ${hoverDecision?.selected?.selectedMw ?? decision.selected?.selectedMw ?? 0} MW`);
-  }, [decision, displayDecision, feeders, hoverDecision, loaded, objectStates, selectedIds]);
+  }, [contingencyRules, decision, displayDecision, feeders, hoverDecision, loaded, objectStates, selectedIds]);
 
   return (
     <section className="sld-stage" aria-label="Single line diagram">

@@ -1,5 +1,6 @@
 export type BreakerState = "closed" | "open" | "failed";
 export type FeederKind = "load" | "generator" | "ibt" | "line" | "coupler";
+export type LoadGroup = 1 | 2 | 3 | 4;
 
 export interface Feeder {
   id: string;
@@ -7,10 +8,20 @@ export interface Feeder {
   kind: FeederKind;
   bus: "A" | "B" | "C";
   mw: number;
+  group: LoadGroup;
   priority: number;
   breakerId: string;
   breakerState: BreakerState;
   shedEligible: boolean;
+}
+
+export interface ContingencyRule {
+  title: string;
+  mode: string;
+  constraint: string;
+  affectedBuses: Array<Feeder["bus"]>;
+  requiredReliefMw: number;
+  explanation: string;
 }
 
 export interface SheddingCandidate {

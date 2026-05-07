@@ -4,17 +4,26 @@ import {
   ChevronDown,
   Gauge,
   GitBranch,
+  Grid3X3,
+  ListChecks,
   RotateCcw,
+  Settings,
   SlidersHorizontal,
   Waves,
   Zap
 } from "lucide-react";
 import { ReasoningRail } from "./ReasoningRail";
 import { EngineerPanel } from "./EngineerPanel";
+import { EventLogView } from "./EventLogView";
+import { SettingsView } from "./SettingsView";
+import { TrippingMatrixView } from "./TrippingMatrixView";
 import { SldCanvas } from "../sld/SldCanvas";
 import { useAdsStore } from "../../lib/ads/store";
 
+type AppView = "cockpit" | "settings" | "events" | "matrix";
+
 export function AppShell() {
+  const [activeView, setActiveView] = useState<AppView>("cockpit");
   const [frequencyHz, setFrequencyHz] = useState(50);
   const [draftFrequencyHz, setDraftFrequencyHz] = useState(48.25);
   const [frequencyOpen, setFrequencyOpen] = useState(false);
@@ -24,7 +33,7 @@ export function AppShell() {
   const demandMw = useAdsStore((state) =>
     state.feeders.filter((feeder) => feeder.breakerState === "closed").reduce((sum, feeder) => sum + feeder.mw, 0)
   );
-  const sourceMw = 625;
+  const sourceMw = useAdsStore((state) => state.sourceMw);
   const reserveMw = Math.max(0, sourceMw - demandMw);
 
   return (
@@ -44,6 +53,22 @@ export function AppShell() {
           <button className="command-button" onClick={reset} type="button">
             <RotateCcw size={16} />
             Reset
+          </button>
+          <button className={`command-button ${activeView === "cockpit" ? "primary" : ""}`} onClick={() => setActiveView("cockpit")} type="button">
+            <Waves size={16} />
+            Cockpit
+          </button>
+          <button className={`command-button ${activeView === "settings" ? "primary" : ""}`} onClick={() => setActiveView("settings")} type="button">
+            <Settings size={16} />
+            Settings
+          </button>
+          <button className={`command-button ${activeView === "events" ? "primary" : ""}`} onClick={() => setActiveView("events")} type="button">
+            <ListChecks size={16} />
+            Event Log
+          </button>
+          <button className={`command-button ${activeView === "matrix" ? "primary" : ""}`} onClick={() => setActiveView("matrix")} type="button">
+            <Grid3X3 size={16} />
+            Matrix
           </button>
 
           <div className="frequency-control">
@@ -90,7 +115,7 @@ export function AppShell() {
             ) : null}
           </div>
 
-          <button className="command-button primary" onClick={() => setRequiredReliefMw(72)} type="button">
+          <button className="command-button" onClick={() => setRequiredReliefMw(72)} type="button">
             <GitBranch size={16} />
             Split Bus B
           </button>
@@ -124,13 +149,18 @@ export function AppShell() {
         </div>
       </header>
 
-      <div className="workspace">
-        <div className="main-column">
-          <SldCanvas />
-          <EngineerPanel />
+      {activeView === "cockpit" ? (
+        <div className="workspace">
+          <div className="main-column">
+            <SldCanvas />
+            <EngineerPanel />
+          </div>
+          <ReasoningRail />
         </div>
-        <ReasoningRail />
-      </div>
+      ) : null}
+      {activeView === "settings" ? <SettingsView /> : null}
+      {activeView === "events" ? <EventLogView /> : null}
+      {activeView === "matrix" ? <TrippingMatrixView /> : null}
     </main>
   );
 }

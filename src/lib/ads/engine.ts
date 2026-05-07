@@ -1,16 +1,7 @@
 import { rankShedding } from "./solver";
-import type { AdsDecision, Feeder } from "./model";
+import type { AdsDecision, ContingencyRule, Feeder } from "./model";
 
-interface ContingencyRule {
-  title: string;
-  mode: string;
-  constraint: string;
-  affectedBuses: Array<Feeder["bus"]>;
-  requiredReliefMw: number;
-  explanation: string;
-}
-
-export const contingencyRules: Record<string, ContingencyRule> = {
+export const initialContingencyRules: Record<string, ContingencyRule> = {
   IBT_A: {
     title: "IBT A Import Constraint",
     mode: "HOVER PREVIEW",
@@ -93,25 +84,33 @@ export const contingencyRules: Record<string, ContingencyRule> = {
   }
 };
 
-export function previewDecisionForObject(objectId: string | null, feeders: Feeder[]): AdsDecision | null {
+export function previewDecisionForObject(
+  objectId: string | null,
+  feeders: Feeder[],
+  rules: Record<string, ContingencyRule> = initialContingencyRules
+): AdsDecision | null {
   if (!objectId) return null;
   if (feeders.some((feeder) => feeder.id === objectId)) return null;
 
-  const rule = contingencyRules[objectId];
+  const rule = rules[objectId];
   if (!rule) return null;
   return rankShedding(feeders, rule.requiredReliefMw, rule);
 }
 
-export function isContingencyObject(objectId: string): boolean {
-  return objectId in contingencyRules;
+export function isContingencyObject(objectId: string, rules: Record<string, ContingencyRule> = initialContingencyRules): boolean {
+  return objectId in rules;
 }
 
-export function decisionForOpenContingencies(objectStates: Record<string, string>, feeders: Feeder[]): AdsDecision | null {
-  const openContingencies = Object.keys(contingencyRules).filter((id) => objectStates[id] === "open");
+export function decisionForOpenContingencies(
+  objectStates: Record<string, string>,
+  feeders: Feeder[],
+  rules: Record<string, ContingencyRule> = initialContingencyRules
+): AdsDecision | null {
+  const openContingencies = Object.keys(rules).filter((id) => objectStates[id] === "open");
   if (openContingencies.length === 0) return null;
 
   const ranked = openContingencies
-    .map((id) => previewDecisionForObject(id, feeders))
+    .map((id) => previewDecisionForObject(id, feeders, rules))
     .filter((decision): decision is AdsDecision => Boolean(decision))
     .sort((left, right) => right.requiredReliefMw - left.requiredReliefMw);
 

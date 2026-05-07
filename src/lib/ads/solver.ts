@@ -26,7 +26,7 @@ export function rankShedding(feeders: Feeder[], requiredReliefMw: number, option
   }
 
   const eligible = feeders.filter((feeder) => feeder.shedEligible && feeder.breakerState === "closed" && feeder.mw > 0);
-  const candidates = buildCandidates(eligible, requiredReliefMw, options).sort(compareCandidates);
+  const candidates = buildGroupedCandidates(eligible, requiredReliefMw, options);
   const selected = candidates[0];
 
   return {
@@ -41,6 +41,16 @@ export function rankShedding(feeders: Feeder[], requiredReliefMw: number, option
     alternatives: candidates.slice(1, 5),
     rejected: candidates.slice(5, 10)
   };
+}
+
+function buildGroupedCandidates(feeders: Feeder[], requiredReliefMw: number, options: RankOptions): SheddingCandidate[] {
+  for (const group of [1, 2, 3, 4] as const) {
+    const groupedFeeders = feeders.filter((feeder) => feeder.group <= group);
+    const candidates = buildCandidates(groupedFeeders, requiredReliefMw, options).sort(compareCandidates);
+    if (candidates.length > 0) return candidates;
+  }
+
+  return [];
 }
 
 function buildCandidates(feeders: Feeder[], requiredReliefMw: number, options: RankOptions): SheddingCandidate[] {
