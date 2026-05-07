@@ -8,62 +8,102 @@
   </head>
   <body>
     <main class="shell">
-      <section class="workspace">
+      <section class="workspace cockpit-workspace">
         <section class="sld-panel">
           <div class="panel-head">
             <div class="sld-brand">
               <div class="brand-mark">ADS</div>
               <div>
                 <h1>GridDefense ADS</h1>
-                <p>Single Line HMI. Click CB to execute; right-click CB to simulate breaker fail.</p>
+                <p>Real-time adaptive defense cockpit</p>
               </div>
             </div>
           </div>
+
+          <nav class="ads-command-bar" aria-label="ADS scenario controls">
+            <button type="button" id="cmdReset" class="command-btn primary">Reset</button>
+            <button type="button" id="cmdFreqDrop" class="command-btn">Freq 48.25 Hz</button>
+            <button type="button" id="cmdSplitBus" class="command-btn">Split Bus B</button>
+            <button type="button" id="cmdDerateGenC2" class="command-btn">Derate KIT C2</button>
+            <button type="button" id="cmdPreTripA2" class="command-btn">Pre-trip A2</button>
+            <button type="button" id="cmdDrawerToggle" class="command-btn ghost">ADS Brain</button>
+          </nav>
+
           <div class="sld-stage">
             <div id="sldMount" class="sld-mount" aria-live="polite"></div>
             <aside id="sldOverlay" class="sld-overlay" aria-live="polite"></aside>
+
+            <aside id="adsDrawer" class="ads-drawer is-collapsed" aria-label="ADS decision brain" aria-expanded="false">
+              <button type="button" id="drawerToggle" class="drawer-toggle" aria-label="Expand ADS Brain" aria-expanded="false">
+                <span>ADS Brain</span>
+              </button>
+
+              <section class="panel decision drawer-panel">
+                <div class="drawer-topline">
+                  <span id="eventDetected">Live ADS scan</span>
+                  <span id="decisionVerdict" class="pill standby">STANDBY</span>
+                </div>
+
+                <div class="panel-head compact decision-head">
+                  <div>
+                    <span id="decisionMode" class="decision-mode">NORMAL</span>
+                    <h2 id="decisionTitle">Normal Monitoring</h2>
+                    <p id="decisionReason">No contingency active.</p>
+                  </div>
+                </div>
+
+                <div class="brain-metric-grid">
+                  <article class="brain-metric emphasis">
+                    <span>Required Relief</span>
+                    <strong id="requiredActionMw">0 MW</strong>
+                  </article>
+                  <article class="brain-metric emphasis teal">
+                    <span>Selected Shedding</span>
+                    <strong id="selectedMw">0 MW</strong>
+                  </article>
+                  <article class="brain-metric">
+                    <span>Effective Relief</span>
+                    <strong id="effectiveReliefMw">0 MW</strong>
+                  </article>
+                  <article class="brain-metric">
+                    <span>Overshed Margin</span>
+                    <strong id="lossAvoided">0 MW</strong>
+                  </article>
+                  <article class="brain-metric">
+                    <span>Cycle Time</span>
+                    <strong id="cycleTimeMs">0 ms</strong>
+                  </article>
+                  <article class="brain-metric">
+                    <span>CB Failures</span>
+                    <strong id="failCount">0</strong>
+                  </article>
+                </div>
+
+                <div id="decisionSteps" class="decision-steps" aria-live="polite"></div>
+
+                <div class="target-section-head">
+                  <span>Selected Defense Target</span>
+                  <b id="targetCount">0</b>
+                </div>
+                <div id="targetList" class="target-list premium-target-list"></div>
+
+                <div class="target-section-head alternatives-head">
+                  <span>Why Not Others</span>
+                  <b id="alternativeCount">0</b>
+                </div>
+                <div id="alternativeList" class="alternative-list"></div>
+              </section>
+            </aside>
           </div>
+
           <div class="legend">
             <span><i class="red"></i>Energized</span>
-            <span><i class="black"></i>Dead / open</span>
+            <span><i class="white"></i>Dead / open</span>
             <span><i class="teal"></i>Armed target</span>
             <span><i class="amber"></i>Overload</span>
-            <span><i class="black"></i>Locked / CB fail</span>
+            <span><i class="white"></i>Locked / CB fail</span>
           </div>
         </section>
-
-        <aside class="right-rail">
-          <section class="panel decision">
-            <div class="panel-head compact">
-              <div>
-                <h2 id="decisionTitle">Normal Monitoring</h2>
-                <p id="decisionReason">No contingency active.</p>
-              </div>
-              <span id="decisionVerdict" class="pill standby">STANDBY</span>
-            </div>
-            <div class="metric-row">
-              <article>
-                <span>Selected Shedding</span>
-                <strong id="selectedMw">0 MW</strong>
-              </article>
-              <article>
-                <span>Loss Avoided</span>
-                <strong id="lossAvoided">0 MW</strong>
-              </article>
-            </div>
-            <div id="targetList" class="target-list"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head compact">
-              <div>
-                <h2>Contingency Injection</h2>
-                <p>Randomized BC-style event and parameter tests.</p>
-              </div>
-            </div>
-            <div id="scenarioGrid" class="scenario-grid"></div>
-          </section>
-        </aside>
       </section>
 
       <section class="lower-grid">
@@ -94,8 +134,8 @@
         <section class="panel priority-panel">
           <div class="panel-head compact">
             <div>
-              <h2>Load Priority</h2>
-              <p>Group 4 is blocked. The optimizer searches the smallest valid total MW after respecting operational priority.</p>
+              <h2>Load Shed Tier</h2>
+              <p>Tier 4 is protected/blocked. The optimizer searches the smallest valid total MW after respecting operational shedding order.</p>
             </div>
           </div>
           <div id="priorityEditor" class="priority-editor"></div>

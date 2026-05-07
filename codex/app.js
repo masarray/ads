@@ -41,21 +41,45 @@ const generatorBreakerMap = {
 };
 
 const loadBreakerMap = {
-  LOAD_A1: ["CB_LOAD_A1"],
-  LOAD_A2: ["CB_LOAD_A2"],
-  LOAD_A3: ["CB_LOAD_A3"],
-  LOAD_A4: ["CB_LOAD_A4"],
-  LOAD_A5: ["CB_LOAD_A5"],
-  LOAD_B1: ["CB_LOAD_B1"],
-  LOAD_B2: ["CB_LOAD_B2"],
-  LOAD_B3: ["CB_LOAD_B3"],
-  LOAD_B4: ["CB_LOAD_B4"],
-  LOAD_B5: ["CB_LOAD_B5"],
-  LOAD_C1: ["CB_LOAD_C1"],
-  LOAD_C2: ["CB_LOAD_C2"],
-  LOAD_C3: ["CB_LOAD_C3"],
-  LOAD_C4: ["CB_LOAD_C4"],
-  LOAD_C5: ["CB_LOAD_C5"]
+  LOAD_A1: ["LOAD_A1"],
+  LOAD_A2: ["LOAD_A2"],
+  LOAD_A3: ["LOAD_A3"],
+  LOAD_A4: ["LOAD_A4"],
+  LOAD_A5: ["LOAD_A5"],
+  LOAD_B1: ["LOAD_B1"],
+  LOAD_B2: ["LOAD_B2"],
+  LOAD_B3: ["LOAD_B3"],
+  LOAD_B4: ["LOAD_B4"],
+  LOAD_B5: ["LOAD_B5"],
+  LOAD_C1: ["LOAD_C1"],
+  LOAD_C2: ["LOAD_C2"],
+  LOAD_C3: ["LOAD_C3"],
+  LOAD_C4: ["LOAD_C4"],
+  LOAD_C5: ["LOAD_C5"]
+};
+
+const objectFeederMap = {
+  IBT_A: ["Line 5", "Ellipse 1", "Ellipse 2", "Ellipse 3"],
+  IBT_C: ["LIBTA", "Ellipse 1_2", "Ellipse 2_2", "Ellipse 3_2"],
+  GEN_A1: ["Line 6", "Ellipse 4"],
+  GEN_A2: ["Line 6_4", "Ellipse 4_4"],
+  GEN_C1: ["Line 6_2", "Ellipse 4_2"],
+  GEN_C2: ["Line 6_3", "Ellipse 4_3"],
+  LOAD_A1: ["Arrow 3"],
+  LOAD_A2: ["Arrow 4"],
+  LOAD_A3: ["Arrow 5"],
+  LOAD_A4: ["Arrow 6"],
+  LOAD_A5: ["Arrow 7"],
+  LOAD_B1: ["Arrow 13"],
+  LOAD_B3: ["Arrow 14"],
+  LOAD_B4: ["Arrow 15"],
+  LOAD_B5: ["Arrow 16"],
+  LOAD_B2: ["Arrow 17"],
+  LOAD_C4: ["Arrow 8"],
+  LOAD_C3: ["Arrow 9"],
+  LOAD_C1: ["Arrow 10"],
+  LOAD_C2: ["Arrow 11"],
+  LOAD_C5: ["Arrow 12"]
 };
 
 function initialSystem() {
@@ -160,6 +184,7 @@ function areaPowerSummary(state, area) {
 function subsetOptimizer(loads, requiredMw, protectedEquipmentId, blockedIds = new Set()) {
   const candidates = loads.filter(l => l.status === "IN_SERVICE" && l.priorityGroup < 4 && l.mw > 0 && !blockedIds.has(l.id));
   let best = null;
+  const ranked = [];
   const count = 1 << candidates.length;
 
   for (let mask = 1; mask < count; mask += 1) {
@@ -179,21 +204,49 @@ function subsetOptimizer(loads, requiredMw, protectedEquipmentId, blockedIds = n
     }
 
     effect = Math.round(effect * 10) / 10;
-    if (effect < requiredMw) continue;
+    const names = selected.map(l => l.name).join(" + ");
+    if (effect < requiredMw) {
+      ranked.push({ selected, mw, effect, overshed: 0, score: Number.POSITIVE_INFINITY, rejectedReason: `${names} only gives ${fmt(effect)} MW relief; needs ${fmt(requiredMw)} MW` });
+      continue;
+    }
 
     const overshed = effect - requiredMw;
-    if (overshed > Math.max(settings.maxOvershedMw, requiredMw * .35)) continue;
+    if (overshed > Math.max(settings.maxOvershedMw, requiredMw * .35)) {
+      ranked.push({ selected, mw, effect, overshed, score: Number.POSITIVE_INFINITY, rejectedReason: `${names} oversheds by ${fmt(overshed)} MW` });
+      continue;
+    }
 
     const score = priorityCost + overshed * 10 + mw * .25 + selected.length * .1;
+    ranked.push({ score, selected, effect, mw, overshed });
     if (!best || score < best.score) {
       best = { score, selected, effect, mw, overshed };
     }
   }
 
-  if (!best) return { selected: [], effect: 0, mw: 0, overshed: 0 };
+  if (!best) {
+    return {
+      selected: [],
+      effect: 0,
+      mw: 0,
+      overshed: 0,
+      topAlternatives: ranked
+        .filter(c => c.rejectedReason)
+        .slice(0, 5)
+        .map(comboToAlternative)
+    };
+  }
 
   return {
     ...best,
+    topAlternatives: ranked
+      .filter(c => comboKey(c) !== comboKey(best))
+      .sort((a, b) => {
+        const aRejected = a.rejectedReason ? 1 : 0;
+        const bRejected = b.rejectedReason ? 1 : 0;
+        return aRejected - bRejected || a.score - b.score || Math.abs(a.overshed) - Math.abs(b.overshed);
+      })
+      .slice(0, 5)
+      .map(comboToAlternative),
     selected: best.selected
       .sort((a, b) => a.priorityGroup - b.priorityGroup || a.mw - b.mw)
       .map(l => ({
@@ -207,6 +260,21 @@ function subsetOptimizer(loads, requiredMw, protectedEquipmentId, blockedIds = n
           : `G${l.priorityGroup}, ${l.mw} MW, island balance target`
       }))
   };
+}
+
+function comboToAlternative(combo) {
+  return {
+    names: combo.selected.map(l => l.name).join(" + ") || "-",
+    mw: combo.mw,
+    effect: combo.effect,
+    overshed: combo.overshed,
+    score: Number.isFinite(combo.score) ? Math.round(combo.score) : null,
+    rejectedReason: combo.rejectedReason ?? null
+  };
+}
+
+function comboKey(combo) {
+  return combo.selected.map(l => l.id).sort().join("+");
 }
 
 function selectGenerators(gens, requiredMw) {
@@ -310,6 +378,7 @@ function decision(mode, title, reason, required, result, generationTargets, logs
     selectedMw: selectedTargets.reduce((sum, t) => sum + t.mw, 0) + generationTargets.reduce((sum, t) => sum + t.mw, 0),
     expectedEffectMw: result.effect ?? generationTargets.reduce((sum, t) => sum + t.expectedEffectMw, 0),
     overshedMw: result.overshed ?? 0,
+    topAlternatives: result.topAlternatives ?? [],
     verdict,
     cycleTimeMs: Math.round(elapsed + 14 + Math.random() * 9),
     logs: [...logs, [verdict === "BLOCKED" ? "warn" : "pass", verdict === "BLOCKED" ? "No valid arming target available" : "Optimization completed"]]
@@ -561,12 +630,12 @@ let contextTargetObjectId = null;
 
 async function boot() {
   await mountSvg();
-  renderScenarioButtons();
+  bindCommandBar();
   render();
 }
 
 async function mountSvg() {
-  const response = await fetch("./SLD_ADS_HMI_v2.svg");
+  const response = await fetch("./SLD_ADS_HMI.svg");
   document.querySelector("#sldMount").innerHTML = await response.text();
   document.querySelector("#sldMount").addEventListener("click", event => {
     const cb = event.target.closest("[data-role='open-close']");
@@ -639,20 +708,55 @@ function hideBreakerContextMenu() {
   menu.setAttribute("aria-hidden", "true");
 }
 
-function renderScenarioButtons() {
-  const grid = document.querySelector("#scenarioGrid");
-  grid.innerHTML = scenarios.map(([id, title, subtitle]) => `
-    <button class="scenario" data-scenario="${id}">
-      <strong>${title}</strong>
-      <span>${subtitle}</span>
-    </button>
-  `).join("");
-  grid.addEventListener("click", event => {
-    const button = event.target.closest("[data-scenario]");
-    if (!button) return;
-    state = applyContingency(state, button.dataset.scenario);
+function bindCommandBar() {
+  const bind = (selector, handler) => {
+    const el = document.querySelector(selector);
+    if (el) el.addEventListener("click", handler);
+  };
+
+  const runCommand = action => {
+    preview = null;
+    hoveredObjectId = null;
+    hideBreakerContextMenu();
+    action();
     render();
-  });
+  };
+
+  bind("#cmdReset", () => runCommand(() => {
+    state = initialSystem();
+  }));
+
+  bind("#cmdFreqDrop", () => runCommand(() => {
+    state = applyContingency(state, "FREQUENCY_DROP");
+  }));
+
+  bind("#cmdSplitBus", () => runCommand(() => {
+    state = applyContingency(state, "SPLIT_BUS_B");
+  }));
+
+  bind("#cmdDerateGenC2", () => runCommand(() => {
+    state = applyContingency(state, "DERATE_GEN_C2");
+  }));
+
+  bind("#cmdPreTripA2", () => runCommand(() => {
+    state = applyContingency(state, "PRE_TRIP_LOAD_A2");
+  }));
+
+  bind("#drawerToggle", toggleAdsDrawer);
+  bind("#cmdDrawerToggle", toggleAdsDrawer);
+}
+
+function toggleAdsDrawer() {
+  const drawer = document.querySelector("#adsDrawer");
+  const toggle = document.querySelector("#drawerToggle");
+  if (!drawer) return;
+  const collapsed = drawer.classList.toggle("is-collapsed");
+  drawer.setAttribute("aria-expanded", String(!collapsed));
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-label", collapsed ? "Expand ADS Brain" : "Collapse ADS Brain");
+  }
+  updateSldOverlay();
 }
 
 function render() {
@@ -670,6 +774,8 @@ function updateSvg() {
   if (!root) return;
   const displayState = state;
   const displayDecision = preview?.decision ?? state.lastExecutedDecision ?? currentDecision;
+  const summaryCard = root.querySelector("#ARMING_SUMMARY");
+  if (summaryCard) summaryCard.setAttribute("display", "none");
   root.querySelector("#CONTINGENCY_LABEL").textContent = preview ? `Preview: ${preview.contingency}` : `Contingency: ${state.activeContingency}`;
   root.querySelector("#FREQUENCY_LABEL").textContent = `${state.frequencyHz.toFixed(2)} Hz`;
   root.querySelector("#ARMING_TOTAL").textContent = `${preview ? "Preview arming" : "Selected shedding"}: ${fmt(displayDecision.selectedMw)} MW`;
@@ -688,12 +794,14 @@ function updateSvg() {
     setText(root, `MW_${ibt.id}`, `${fmt(ibt.flowMw)} MW`);
     const loading = ibt.flowMw / ibt.limitMw * 100;
     setClass(root, ibt.id, ibt.status === "TRIPPED" ? "svg-tripped" : loading >= settings.overloadPickupPercent ? "svg-overload" : "svg-normal");
+    setFeederState(root, ibt.id, ibt.status !== "TRIPPED");
     for (const cb of ibtBreakerMap[ibt.id] ?? []) setBreakerState(root, cb, ibt.status === "TRIPPED" ? "open" : "closed");
   }
 
   for (const gen of displayState.generators) {
     setText(root, `MW_${gen.id}`, `${fmt(gen.mw)} MW`);
     setClass(root, gen.id, gen.status === "TRIPPED" ? "svg-tripped" : gen.status === "DERATED" ? "svg-overload" : "svg-normal");
+    setFeederState(root, gen.id, gen.status !== "TRIPPED");
     for (const cb of generatorBreakerMap[gen.id] ?? []) {
       setBreakerState(root, cb, gen.status === "TRIPPED" ? "open" : "closed");
       if (selectedIds.has(gen.id)) setClass(root, cb, "svg-selected");
@@ -704,6 +812,7 @@ function updateSvg() {
     setText(root, `MW_${loadRef.id}`, `${fmt(loadRef.mw)} MW`);
     const cls = loadRef.status === "TRIPPED" ? "svg-tripped" : loadRef.status === "BLOCKED" ? "svg-blocked" : loadRef.status === "ARMED" || selectedIds.has(loadRef.id) ? "svg-selected" : "svg-normal";
     setClass(root, loadRef.id, cls);
+    setFeederState(root, loadRef.id, loadRef.status !== "TRIPPED");
     for (const cb of loadBreakerMap[loadRef.id] ?? []) {
       setBreakerState(root, cb, loadRef.status === "TRIPPED" ? "open" : "closed");
       if (selectedIds.has(loadRef.id) || loadRef.status === "ARMED") setClass(root, cb, "svg-selected");
@@ -729,12 +838,24 @@ function clearRuntime(root) {
   root.querySelectorAll(".svg-normal,.svg-selected,.svg-tripped,.svg-open,.svg-blocked,.svg-overload,.cb-open,.cb-closed,.cb-failed").forEach(el => {
     el.classList.remove("svg-normal", "svg-selected", "svg-tripped", "svg-open", "svg-blocked", "svg-overload", "cb-open", "cb-closed", "cb-failed");
   });
+  root.querySelectorAll(".feeder-on,.feeder-off").forEach(el => {
+    el.classList.remove("feeder-on", "feeder-off");
+  });
   root.querySelectorAll(".runtime-cb-fail-icon,.runtime-lock-icon").forEach(el => el.remove());
 }
 
 function setClass(root, id, className) {
   const el = root.querySelector(`#${CSS.escape(id)}`);
   if (el) el.classList.add(className);
+}
+
+function setFeederState(root, objectId, isLive) {
+  for (const id of objectFeederMap[objectId] ?? []) {
+    const el = root.querySelector(`#${CSS.escape(id)}`);
+    if (!el) continue;
+    el.classList.remove("feeder-on", "feeder-off");
+    el.classList.add(isLive ? "feeder-on" : "feeder-off");
+  }
 }
 
 function setBreakerState(root, id, stateName) {
@@ -808,20 +929,123 @@ function setText(root, id, value) {
   if (el) el.textContent = value;
 }
 
+function setTextIfPresent(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.textContent = value;
+}
+
+function setHtmlIfPresent(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.innerHTML = value;
+}
+
+function decisionSourceLabel() {
+  if (preview) return `${preview.objectId} hover preview`;
+  if (state.lastExecutedDecision) return state.activeContingency;
+  return state.activeContingency === "NONE" ? "Live ADS scan" : state.activeContingency;
+}
+
+function isDrawerCollapsed() {
+  return document.querySelector("#adsDrawer")?.classList.contains("is-collapsed") ?? false;
+}
+
 function updateDecision() {
   const displayDecision = preview?.decision ?? state.lastExecutedDecision ?? currentDecision;
-  document.querySelector("#decisionTitle").textContent = displayDecision.title;
-  document.querySelector("#decisionReason").textContent = displayDecision.reason;
-  document.querySelector("#selectedMw").textContent = `${fmt(displayDecision.selectedMw)} MW`;
-  document.querySelector("#lossAvoided").textContent = `${fmt(Math.max(0, displayDecision.expectedEffectMw - displayDecision.requiredActionMw))} MW`;
-  const verdict = document.querySelector("#decisionVerdict");
-  verdict.textContent = preview ? `PREVIEW ${displayDecision.verdict}` : displayDecision.verdict;
-  verdict.className = `pill ${displayDecision.verdict === "ARMED" ? "armed" : displayDecision.verdict === "TRIP_ISSUED" ? "trip" : displayDecision.verdict === "PASS" ? "pass" : displayDecision.verdict === "BLOCKED" ? "blocked" : "standby"}`;
-
   const targets = [...displayDecision.selectedTargets, ...displayDecision.selectedGenerationTargets];
-  document.querySelector("#targetList").innerHTML = targets.length
-    ? targets.map(t => `<article class="target-card"><div><strong>${t.name}</strong><span>${t.reason}</span></div><b>${fmt(t.mw)} MW</b></article>`).join("")
-    : `<article class="target-card"><div><strong>No target armed</strong><span>System is secure or no valid target is available.</span></div><b>0 MW</b></article>`;
+  const effectiveRelief = displayDecision.expectedEffectMw ?? displayDecision.selectedMw;
+  const overshed = displayDecision.overshedMw ?? Math.max(0, effectiveRelief - displayDecision.requiredActionMw);
+  const verdictClass = displayDecision.verdict === "ARMED"
+    ? "armed"
+    : displayDecision.verdict === "TRIP_ISSUED"
+      ? "trip"
+      : displayDecision.verdict === "PASS"
+        ? "pass"
+        : displayDecision.verdict === "BLOCKED"
+          ? "blocked"
+          : "standby";
+
+  setTextIfPresent("#decisionTitle", displayDecision.title);
+  setTextIfPresent("#decisionReason", displayDecision.reason);
+  setTextIfPresent("#decisionMode", displayDecision.mode);
+  setTextIfPresent("#eventDetected", decisionSourceLabel());
+  setTextIfPresent("#requiredActionMw", `${fmt(displayDecision.requiredActionMw)} MW`);
+  setTextIfPresent("#selectedMw", `${fmt(displayDecision.selectedMw)} MW`);
+  setTextIfPresent("#effectiveReliefMw", `${fmt(effectiveRelief)} MW`);
+  setTextIfPresent("#lossAvoided", `${fmt(overshed)} MW`);
+  setTextIfPresent("#cycleTimeMs", `${displayDecision.cycleTimeMs} ms`);
+  setTextIfPresent("#failCount", `${(state.breakerFailures ?? []).length}`);
+  setTextIfPresent("#targetCount", `${targets.length}`);
+  setTextIfPresent("#alternativeCount", `${displayDecision.topAlternatives?.length ?? 0}`);
+
+  const verdict = document.querySelector("#decisionVerdict");
+  if (verdict) {
+    verdict.textContent = preview ? `PREVIEW ${displayDecision.verdict}` : displayDecision.verdict;
+    verdict.className = `pill ${verdictClass}`;
+  }
+
+  const bestDefense = targets.length
+    ? targets.map(t => t.name).join(" + ")
+    : displayDecision.verdict === "BLOCKED"
+      ? "No valid target available"
+      : "No shedding required";
+
+  setHtmlIfPresent("#decisionSteps", `
+    <article class="decision-step">
+      <span>01</span>
+      <div>
+        <strong>Event detected</strong>
+        <p>${decisionSourceLabel()}</p>
+      </div>
+    </article>
+    <article class="decision-step">
+      <span>02</span>
+      <div>
+        <strong>Required action</strong>
+        <p>${fmt(displayDecision.requiredActionMw)} MW minimum relief calculated by ${displayDecision.mode} logic.</p>
+      </div>
+    </article>
+    <article class="decision-step selected">
+      <span>03</span>
+      <div>
+        <strong>Best defense</strong>
+        <p>${bestDefense}</p>
+      </div>
+    </article>
+    <article class="decision-step">
+      <span>04</span>
+      <div>
+        <strong>Why this combination</strong>
+        <p>Meets relief target, respects blocked/protected loads, avoids breaker-failed CBs, and keeps overshed margin at ${fmt(overshed)} MW.</p>
+      </div>
+    </article>
+  `);
+
+  setHtmlIfPresent("#targetList", targets.length
+    ? targets.map(t => `
+      <article class="target-card premium-target">
+        <div>
+          <strong>${t.name}</strong>
+          <span>${t.reason}</span>
+        </div>
+        <div class="target-mw">
+          <b>${fmt(t.mw)} MW</b>
+          <small>effect ${fmt(t.expectedEffectMw ?? t.mw)} MW</small>
+        </div>
+      </article>
+    `).join("")
+    : `<article class="target-card premium-target"><div><strong>No target armed</strong><span>System is secure or no valid target is available.</span></div><div class="target-mw"><b>0 MW</b><small>standby</small></div></article>`);
+
+  setHtmlIfPresent("#alternativeList", displayDecision.topAlternatives?.length
+    ? displayDecision.topAlternatives.map(a => `
+      <article class="alternative-card ${a.rejectedReason ? "rejected" : "ranked"}">
+        <div>
+          <strong>${a.names}</strong>
+          <span>${a.rejectedReason ?? `Valid alternative, score ${a.score}, overshed ${fmt(a.overshed)} MW`}</span>
+        </div>
+        <b>${fmt(a.effect)} MW</b>
+      </article>
+    `).join("")
+    : `<article class="alternative-card"><div><strong>No alternative evaluated</strong><span>System is secure or no shedding is required.</span></div><b>0 MW</b></article>`);
 }
 
 function updateSldOverlay() {
@@ -829,94 +1053,40 @@ function updateSldOverlay() {
   if (!overlay) return;
 
   const displayDecision = preview?.decision ?? state.lastExecutedDecision ?? currentDecision;
-  const sourceLabel = preview
-    ? `${preview.objectId} hover preview`
-    : state.lastExecutedDecision
-      ? state.activeContingency
-      : state.activeContingency === "NONE"
-        ? "Live ADS scan"
-        : state.activeContingency;
-  const targets = [...displayDecision.selectedTargets, ...displayDecision.selectedGenerationTargets];
-  const balance = powerSummary(state);
-  const areas = ["A", "B", "C"].map(area => areaPowerSummary(state, area));
-  const tone = preview ? "preview" : state.lastExecutedDecision ? "executed" : "live";
-  const title = preview
-    ? "Arming Preview"
-    : state.lastExecutedDecision
-      ? "Executed Trip Result"
-      : displayDecision.mode === "NORMAL"
-        ? "Live Calculation"
-        : "ADS Calculation";
+  const drawerCollapsed = isDrawerCollapsed();
 
-  overlay.className = `sld-overlay ${tone}`;
+  if (!preview || !drawerCollapsed) {
+    overlay.hidden = true;
+    overlay.className = "sld-overlay";
+    overlay.innerHTML = "";
+    return;
+  }
+
+  const targets = [...displayDecision.selectedTargets, ...displayDecision.selectedGenerationTargets];
+  overlay.hidden = false;
+  overlay.className = "sld-overlay preview-compact";
   overlay.innerHTML = `
-    <div class="overlay-eyebrow">
-      <span>${sourceLabel}</span>
-      <b>${displayDecision.mode}</b>
+    <div class="hud-topline">
+      <span class="hud-source">${preview.objectId} preview</span>
+      <b class="hud-pill">${displayDecision.verdict}</b>
     </div>
-    <h3>${title}</h3>
-    <p>${displayDecision.reason}</p>
-    <div class="overlay-metrics">
-      <article>
-        <span>Gen</span>
-        <strong>${fmt(balance.generation)} MW</strong>
-      </article>
-      <article>
-        <span>Load</span>
-        <strong>${fmt(balance.loadMw)} MW</strong>
-      </article>
-      <article>
-        <span>Delta</span>
-        <strong>${fmt(balance.balance)} MW</strong>
-      </article>
-      <article>
-        <span>Cycle</span>
-        <strong>${displayDecision.cycleTimeMs} ms</strong>
-      </article>
+    <div class="hud-title">
+      <strong>${displayDecision.title}</strong>
+      <span>${displayDecision.mode}</span>
     </div>
-    <div class="overlay-balance">
-      ${areas.map(a => `
-        <div class="balance-chip">
-          <span>GI ${a.area}</span>
-          <strong>${fmt(a.balance)} MW</strong>
-        </div>
-      `).join("")}
-    </div>
-    <div class="overlay-metrics">
-      <article>
+    <div class="hud-chip-row">
+      <div class="hud-chip">
         <span>Required</span>
-        <strong>${fmt(displayDecision.requiredActionMw)} MW</strong>
-      </article>
-      <article>
+        <b>${fmt(displayDecision.requiredActionMw)} MW</b>
+      </div>
+      <div class="hud-chip">
         <span>Selected</span>
-        <strong>${fmt(displayDecision.selectedMw)} MW</strong>
-      </article>
-      <article>
-        <span>Margin</span>
-        <strong>${fmt(Math.max(0, displayDecision.selectedMw - displayDecision.requiredActionMw))} MW</strong>
-      </article>
-      <article>
-        <span>Fail</span>
-        <strong>${(state.breakerFailures ?? []).length}</strong>
-      </article>
+        <b>${fmt(displayDecision.selectedMw)} MW</b>
+      </div>
     </div>
-    <div class="overlay-targets">
-      ${targets.length ? targets.map(t => `
-        <div class="overlay-target">
-          <div>
-            <strong>${t.name}</strong>
-          </div>
-          <b>${fmt(t.mw)} MW</b>
-        </div>
-      `).join("") : `
-        <div class="overlay-target">
-          <div>
-            <strong>No arming target</strong>
-            <small>System is inside secure operating range.</small>
-          </div>
-          <b>0 MW</b>
-        </div>
-      `}
+    <div class="hud-foot">
+      <span>${targets.length} target(s)</span>
+      <span>${displayDecision.cycleTimeMs} ms</span>
     </div>
   `;
 }
