@@ -2,26 +2,26 @@
 <svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
   <style id="ADS_RUNTIME_STYLE">
   /* ADS runtime binding contract: layout authored manually, state driven by app classes. */
-  .conductor, .busbar, .tap, .equipment-line { stroke: #d51f2a !important; stroke-linecap: round; stroke-linejoin: round; }
-  .busbar { stroke-width: 10; }
-  .cb-body { fill: #d51f2a !important; stroke: #7f1d1d !important; stroke-width: 2.4; }
-  .cb-open .cb-body, .svg-open .cb-body, .svg-tripped .cb-body { fill: #ffffff !important; stroke: #ffffff !important; }
-  .cb-closed .cb-body, .svg-normal .cb-body { fill: #d51f2a !important; stroke: #7f1d1d !important; }
-  .svg-tripped.conductor, .svg-tripped .conductor, .svg-open.conductor, .state-dead.conductor { stroke: #ffffff !important; }
-  .svg-overload.conductor, .svg-overload .conductor { stroke: #f97316 !important; stroke-width: 7; }
-  .svg-selected .cb-body, .svg-selected.cb-body { stroke: #14b8a6 !important; stroke-width: 3.4 !important; filter: drop-shadow(0 0 8px rgba(20,184,166,.78)); }
+  .conductor, .busbar, .tap, .equipment-line { stroke: #ff3046 !important; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .busbar { stroke-width: 10; filter: drop-shadow(0 0 2px rgba(255,48,70,.52)); }
+  .cb-body { fill: #ff3046 !important; stroke: #ffc2cb !important; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+  .cb-open .cb-body, .svg-open .cb-body, .svg-tripped .cb-body { fill: #eefdfa !important; stroke: #ffffff !important; }
+  .cb-closed .cb-body, .svg-normal .cb-body { fill: #ff3046 !important; stroke: #ffc2cb !important; }
+  .svg-tripped.conductor, .svg-tripped .conductor, .svg-open.conductor, .state-dead.conductor { stroke: #eefdfa !important; }
+  .svg-overload.conductor, .svg-overload .conductor { stroke: #ff9f1c !important; stroke-width: 7; }
+  .svg-selected .cb-body, .svg-selected.cb-body { stroke: #fff2b8 !important; stroke-width: 3 !important; filter: drop-shadow(0 0 8px rgba(255,209,102,.76)); }
   .svg-blocked { opacity: .46; }
   .cb-failed .cb-body { stroke: #f97316 !important; stroke-width: 4 !important; stroke-dasharray: 3 2; }
   .hit-target { fill: transparent !important; stroke: none !important; pointer-events: all; cursor: pointer; }
   [data-role="open-close"] { cursor: pointer; }
-  path.feeder-on { fill: #d51f2a !important; stroke: #d51f2a !important; }
-  path.feeder-off { fill: #ffffff !important; stroke: #ffffff !important; }
+  path.feeder-on { fill: #ff3046 !important; stroke: #ff3046 !important; }
+  path.feeder-off { fill: #eefdfa !important; stroke: #eefdfa !important; }
   path.feeder-on:not([id^="Arrow"]), path.feeder-off:not([id^="Arrow"]) { fill: none !important; }
-  line.feeder-on, circle.feeder-on { stroke: #d51f2a !important; }
-  line.feeder-off, circle.feeder-off { stroke: #ffffff !important; }
+  line.feeder-on, circle.feeder-on { stroke: #ff3046 !important; }
+  line.feeder-off, circle.feeder-off { stroke: #eefdfa !important; }
   circle.feeder-on, circle.feeder-off { fill: none !important; }
-  .runtime-meter { fill: #a8fff6; font: 650 13px Aptos, 'Segoe UI', Arial, sans-serif; paint-order: stroke; stroke: rgba(0,0,0,.72); stroke-width: 3px; stroke-linejoin: round; }
-  .runtime-status { fill: #eef7f4; font: 650 14px Aptos, 'Segoe UI', Arial, sans-serif; paint-order: stroke; stroke: rgba(0,0,0,.72); stroke-width: 3px; stroke-linejoin: round; }
+  .runtime-meter { fill: #9ffdf4; font: 800 13px Aptos, 'Segoe UI', Arial, sans-serif; paint-order: stroke; stroke: rgba(0,8,7,.82); stroke-width: 2.2px; stroke-linejoin: round; text-rendering: geometricPrecision; }
+  .runtime-status { fill: #f5fffc; font: 800 14px Aptos, 'Segoe UI', Arial, sans-serif; paint-order: stroke; stroke: rgba(0,8,7,.82); stroke-width: 2.4px; stroke-linejoin: round; text-rendering: geometricPrecision; }
 </style>
   <g id="SLD_ADS_HMI">
     <path id="LINE_AC" class="conductor" data-kind="line" data-object="LINE_AC" data-role="primary-conductor" data-state="closed" d="M139 767V191H1289V766.5" stroke="white" stroke-width="4" style="stroke-linecap: square; stroke-linejoin: miter;"/>

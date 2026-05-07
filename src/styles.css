@@ -318,9 +318,10 @@ button {
 
 .sld-stage {
   background:
-    linear-gradient(rgba(126, 228, 213, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(126, 228, 213, 0.055) 1px, transparent 1px),
-    #07100d;
+    radial-gradient(circle at 28% 18%, rgba(110, 219, 208, 0.12), transparent 26%),
+    linear-gradient(rgba(126, 228, 213, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 228, 213, 0.07) 1px, transparent 1px),
+    #06110e;
   background-size: 24px 24px;
   border-right: 1px solid var(--m3-outline);
   min-height: 0;
@@ -463,15 +464,18 @@ button {
 
 .sld-canvas {
   min-height: 100%;
-  min-width: 1500px;
-  padding: 16px;
-  width: max(100%, 1500px);
+  min-width: 1920px;
+  padding: 0;
+  width: max(100%, 1920px);
 }
 
 .sld-canvas svg {
   display: block;
   height: auto;
-  width: 100%;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
+  width: 1920px;
 }
 
 .side-rail {
@@ -1329,20 +1333,22 @@ button {
 }
 
 .sld-canvas [data-role="open-close"]:hover .cb-body {
-  filter: drop-shadow(0 0 8px rgba(110, 219, 208, 0.9));
+  filter:
+    drop-shadow(0 0 2px rgba(219, 255, 251, 0.95))
+    drop-shadow(0 0 10px rgba(110, 219, 208, 0.62));
 }
 
 .sld-canvas .cb-open .cb-body,
 .sld-canvas .svg-open .cb-body,
 .sld-canvas .svg-tripped .cb-body {
-  fill: #ffffff !important;
+  fill: #eefdfa !important;
   stroke: #ffffff !important;
 }
 
 .sld-canvas .feeder-off,
 .sld-canvas .svg-tripped.conductor,
 .sld-canvas .svg-tripped .conductor {
-  stroke: #ffffff !important;
+  stroke: #eefdfa !important;
 }
 
 .sld-canvas path.feeder-off:not([id^="Arrow"]),
@@ -1352,15 +1358,16 @@ button {
 
 .sld-canvas .svg-armed .cb-body,
 .sld-canvas .svg-selected .cb-body {
-  fill: var(--m3-amber) !important;
-  stroke: var(--m3-amber) !important;
+  fill: #ffd166 !important;
+  stroke: #fff2b8 !important;
+  stroke-width: 3px !important;
   animation: arming-glow 950ms ease-in-out infinite;
 }
 
 .sld-canvas .svg-armed path[id^="Arrow"],
 .sld-canvas path.svg-armed[id^="Arrow"] {
-  fill: var(--m3-amber) !important;
-  stroke: var(--m3-amber) !important;
+  fill: #ffd166 !important;
+  stroke: #ffd166 !important;
   animation: arming-glow 950ms ease-in-out infinite;
 }
 
@@ -1369,10 +1376,12 @@ button {
 }
 
 .sld-canvas .runtime-trip-chip rect {
-  fill: #f4bd47;
-  stroke: rgba(255, 245, 205, 0.95);
+  fill: #ffd166;
+  stroke: rgba(255, 248, 214, 0.98);
   stroke-width: 1.2;
-  filter: drop-shadow(0 0 7px rgba(244, 189, 71, 0.75));
+  filter:
+    drop-shadow(0 1px 0 rgba(0, 0, 0, 0.4))
+    drop-shadow(0 0 8px rgba(255, 209, 102, 0.7));
 }
 
 .sld-canvas .runtime-trip-chip text {
@@ -1385,10 +1394,12 @@ button {
 @keyframes arming-glow {
   0%,
   100% {
-    filter: drop-shadow(0 0 0 rgba(244, 189, 71, 0));
+    filter: drop-shadow(0 0 2px rgba(255, 245, 205, 0.5));
   }
   50% {
-    filter: drop-shadow(0 0 12px rgba(244, 189, 71, 0.95));
+    filter:
+      drop-shadow(0 0 3px rgba(255, 248, 214, 0.9))
+      drop-shadow(0 0 12px rgba(255, 209, 102, 0.8));
   }
 }
 

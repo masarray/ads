@@ -99,6 +99,8 @@ export function SldCanvas() {
     if (!host || !root || !loaded) return;
 
     root.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    root.setAttribute("shape-rendering", "geometricPrecision");
+    root.setAttribute("text-rendering", "geometricPrecision");
     root.removeAttribute("width");
     root.removeAttribute("height");
     root.classList.add("ads-sld-svg");
