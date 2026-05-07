@@ -470,12 +470,12 @@ button {
 }
 
 .sld-scale-layer {
-  height: 1080px;
+  height: 840px;
   left: 0;
   position: absolute;
   top: 0;
   transform-origin: top left;
-  width: 1920px;
+  width: 1850px;
 }
 
 .sld-scale-layer svg {
@@ -484,7 +484,7 @@ button {
   overflow: visible;
   shape-rendering: geometricPrecision;
   text-rendering: geometricPrecision;
-  width: 1920px;
+  width: 1850px;
 }
 
 .sld-zoom-toolbar {

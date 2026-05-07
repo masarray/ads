@@ -52,8 +52,14 @@ const objectMwText: Record<string, string> = {
   GEN_C2: "145 MW"
 };
 
-const sldNativeWidth = 1920;
-const sldNativeHeight = 1080;
+const sldViewBox = {
+  x: 35,
+  y: 170,
+  width: 1850,
+  height: 840
+};
+const sldNativeWidth = sldViewBox.width;
+const sldNativeHeight = sldViewBox.height;
 const minZoom = 0.45;
 const maxZoom = 1.35;
 
@@ -67,6 +73,7 @@ export function SldCanvas() {
   const [fitZoom, setFitZoom] = useState(0.7);
   const [zoom, setZoom] = useState(0.7);
   const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; body: string } | null>(null);
   const feeders = useAdsStore((state) => state.feeders);
   const contingencyRules = useAdsStore((state) => state.contingencyRules);
@@ -81,16 +88,20 @@ export function SldCanvas() {
     [decision, hoverDecision]
   );
   const clampedZoom = Math.min(maxZoom, Math.max(minZoom, zoom));
-  const canvasWidth = sldNativeWidth * clampedZoom;
-  const canvasHeight = sldNativeHeight * clampedZoom;
+  const scaledWidth = sldNativeWidth * clampedZoom;
+  const scaledHeight = sldNativeHeight * clampedZoom;
+  const canvasWidth = Math.max(stageSize.width, scaledWidth);
+  const canvasHeight = Math.max(stageSize.height, scaledHeight);
+  const layerOffsetX = Math.max(0, (canvasWidth - scaledWidth) / 2);
+  const layerOffsetY = Math.max(0, (canvasHeight - scaledHeight) / 2);
 
   const fitToStage = useCallback(() => {
     const stage = stageRef.current;
     if (!stage) return;
 
-    const viewportWidth = Math.max(1, stage.clientWidth - 28);
-    const viewportHeight = Math.max(1, stage.clientHeight - 28);
-    const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.96;
+    const viewportWidth = Math.max(1, stage.clientWidth - 18);
+    const viewportHeight = Math.max(1, stage.clientHeight - 18);
+    const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.99;
     const nextZoom = Math.min(maxZoom, Math.max(minZoom, nextFitZoom));
 
     setFitZoom(nextZoom);
@@ -114,14 +125,16 @@ export function SldCanvas() {
     if (!stage) return;
 
     const observer = new ResizeObserver(() => {
-      const viewportWidth = Math.max(1, stage.clientWidth - 28);
-      const viewportHeight = Math.max(1, stage.clientHeight - 28);
-      const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.96;
+      setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
+      const viewportWidth = Math.max(1, stage.clientWidth - 18);
+      const viewportHeight = Math.max(1, stage.clientHeight - 18);
+      const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.99;
       const nextZoom = Math.min(maxZoom, Math.max(minZoom, nextFitZoom));
       setFitZoom(nextZoom);
       if (zoomMode === "fit") setZoom(nextZoom);
     });
 
+    setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
     observer.observe(stage);
     return () => observer.disconnect();
   }, [zoomMode]);
@@ -160,6 +173,7 @@ export function SldCanvas() {
     root.setAttribute("preserveAspectRatio", "xMidYMid meet");
     root.setAttribute("shape-rendering", "geometricPrecision");
     root.setAttribute("text-rendering", "geometricPrecision");
+    root.setAttribute("viewBox", `${sldViewBox.x} ${sldViewBox.y} ${sldViewBox.width} ${sldViewBox.height}`);
     root.setAttribute("width", String(sldNativeWidth));
     root.setAttribute("height", String(sldNativeHeight));
     root.classList.add("ads-sld-svg");
@@ -341,7 +355,11 @@ export function SldCanvas() {
         <div
           ref={hostRef}
           className="sld-scale-layer"
-          style={{ transform: `scale(${clampedZoom})` }}
+          style={{
+            left: layerOffsetX,
+            top: layerOffsetY,
+            transform: `scale(${clampedZoom})`
+          }}
         />
       </div>
       {tooltip ? (
