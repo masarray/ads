@@ -11,6 +11,8 @@ import {
   Settings,
   SlidersHorizontal,
   GitFork,
+  Info,
+  X,
   Zap,
 } from "lucide-react";
 import { ReasoningRail } from "./ReasoningRail";
@@ -53,6 +55,7 @@ export function AppShell() {
   const [frequencyHz, setFrequencyHz] = useState(50);
   const [draftFrequencyHz, setDraftFrequencyHz] = useState(48.25);
   const [frequencyOpen, setFrequencyOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const reset = useAdsStore((state) => state.reset);
   const requiredReliefMw = useAdsStore((state) => state.requiredReliefMw);
   const setRequiredReliefMw = useAdsStore((state) => state.setRequiredReliefMw);
@@ -72,8 +75,8 @@ export function AppShell() {
             <GitFork size={20} strokeWidth={2.5} />
           </span>
           <div>
-            <h1>GridDefense ADS</h1>
-            <p>Smart Defense Reasoning Cockpit</p>
+            <h1>Adaptive Defense Scheme</h1>
+            <p>Smart ADS Reasoning Cockpit</p>
           </div>
         </div>
 
@@ -82,6 +85,8 @@ export function AppShell() {
             <RotateCcw size={16} />
             Reset
           </button>
+
+          <span className="topbar-separator" aria-hidden="true" />
 
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -110,10 +115,15 @@ export function AppShell() {
             );
           })}
 
+          <span className="topbar-separator" aria-hidden="true" />
+
           <div className="frequency-control">
             <button
               className="command-button"
-              onClick={() => setFrequencyOpen((open) => !open)}
+              onClick={() => {
+                setFrequencyOpen((open) => !open);
+                setAboutOpen(false);
+              }}
               type="button"
             >
               <Gauge size={16} />
@@ -202,26 +212,105 @@ export function AppShell() {
           </button>
         </nav>
 
-        <div className="system-strip" aria-label="System balance">
-          <div>
-            <Activity size={14} />
-            <span>Source</span>
-            <strong>{sourceMw} MW</strong>
+        <div className="topbar-right">
+          <span
+            className="topbar-separator topbar-separator--metrics"
+            aria-hidden="true"
+          />
+
+          <div className="system-strip" aria-label="System balance">
+            <div>
+              <Activity size={14} />
+              <span>Source</span>
+              <strong>{sourceMw} MW</strong>
+            </div>
+            <div>
+              <SlidersHorizontal size={14} />
+              <span>Demand</span>
+              <strong>{demandMw} MW</strong>
+            </div>
+            <div>
+              <Zap size={14} />
+              <span>Reserve</span>
+              <strong>{reserveMw} MW</strong>
+            </div>
+            <div>
+              <Gauge size={14} />
+              <span>Relief</span>
+              <strong>{requiredReliefMw} MW</strong>
+            </div>
           </div>
-          <div>
-            <SlidersHorizontal size={14} />
-            <span>Demand</span>
-            <strong>{demandMw} MW</strong>
-          </div>
-          <div>
-            <Zap size={14} />
-            <span>Reserve</span>
-            <strong>{reserveMw} MW</strong>
-          </div>
-          <div>
-            <Gauge size={14} />
-            <span>Relief</span>
-            <strong>{requiredReliefMw} MW</strong>
+
+          <div className="about-control">
+            <button
+              aria-label="About developer"
+              className="about-button"
+              data-tooltip="About developer"
+              onClick={() => {
+                setAboutOpen((open) => !open);
+                setFrequencyOpen(false);
+              }}
+              type="button"
+            >
+              <Info size={17} strokeWidth={2.7} />
+            </button>
+
+            <AnimatePresence>
+              {aboutOpen ? (
+                <>
+                  <motion.button
+                    aria-label="Close about developer"
+                    className="about-backdrop"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setAboutOpen(false)}
+                    type="button"
+                  />
+                  <motion.section
+                    aria-label="About Ari Sulistiono"
+                    className="about-popover"
+                    initial={{ opacity: 0, scale: 0.92, y: -8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.94, y: -6 }}
+                    transition={{ duration: 0.22, ease: [0.3, 0, 0, 1] }}
+                  >
+                    <header className="about-card-header">
+                      <span className="about-avatar">AS</span>
+                      <div>
+                        <small>Developed by</small>
+                        <h3>Ari Sulistiono</h3>
+                      </div>
+                      <button
+                        aria-label="Close developer card"
+                        className="about-close"
+                        onClick={() => setAboutOpen(false)}
+                        type="button"
+                      >
+                        <X size={15} />
+                      </button>
+                    </header>
+
+                    <p className="about-role">
+                      Substation Automation Engineer · Digital Substation Tools
+                    </p>
+
+                    <div className="about-chips">
+                      <span>ADS Logic</span>
+                      <span>IEC 61850</span>
+                      <span>Protection</span>
+                      <span>SCADA</span>
+                    </div>
+
+                    <p className="about-copy">
+                      GridDefense ADS is a smart defense reasoning cockpit
+                      prototype for visualizing contingency impact, optimized
+                      load shedding, and minimum lost MW decisions.
+                    </p>
+                  </motion.section>
+                </>
+              ) : null}
+            </AnimatePresence>
           </div>
         </div>
       </header>
