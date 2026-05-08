@@ -1,6 +1,6 @@
 # UI Editing Guide
 
-Panduan ini menjelaskan file mana yang perlu diedit kalau ingin memperbaiki layout, mempercantik tampilan, mengubah posisi panel, atau menyesuaikan perilaku UI GridDefense ADS.
+Panduan ini menjelaskan file mana yang perlu diedit kalau ingin memperbaiki layout, mempercantik tampilan, mengubah posisi panel, atau menyesuaikan perilaku UI Smart ADS.
 
 ## Struktur Utama UI
 
@@ -9,6 +9,7 @@ Panduan ini menjelaskan file mana yang perlu diedit kalau ingin memperbaiki layo
 Edit file ini kalau ingin mengubah struktur layar utama.
 
 Yang diatur di sini:
+
 - Top app bar
 - Brand / judul aplikasi
 - Tombol navigasi `Cockpit`, `Settings`, `Event Log`, `Matrix`
@@ -22,6 +23,7 @@ Yang diatur di sini:
   - Tripping Matrix
 
 Contoh kebutuhan:
+
 - Memindahkan tombol Settings ke kanan
 - Mengubah urutan menu
 - Menambah halaman baru
@@ -34,6 +36,7 @@ Contoh kebutuhan:
 Edit file ini untuk hampir semua urusan visual.
 
 Yang diatur di sini:
+
 - Warna utama aplikasi
 - Background
 - Spacing
@@ -53,6 +56,7 @@ Yang diatur di sini:
 - Responsive layout mobile
 
 Bagian penting:
+
 - `:root` untuk token warna global
 - `.top-app-bar` untuk header
 - `.command-button` untuk tombol toolbar
@@ -65,6 +69,7 @@ Bagian penting:
 - `.matrix-workspace`, `.matrix-item`, `.matrix-body` untuk Tripping Matrix
 
 Contoh kebutuhan:
+
 - Membuat tampilan lebih premium
 - Mengubah ukuran panel kanan
 - Mengubah tinggi Engineer Drawer
@@ -79,6 +84,7 @@ Contoh kebutuhan:
 Edit file ini kalau ingin mengubah cara SLD ditampilkan atau berinteraksi.
 
 Yang diatur di sini:
+
 - Load file SVG dari `public/assets/SLD_ADS_HMI.svg`
 - Mapping object ADS ke elemen SVG
 - Tooltip saat hover
@@ -90,6 +96,7 @@ Yang diatur di sini:
 - Warna state lewat class CSS runtime
 
 Contoh kebutuhan:
+
 - Mengubah behavior hover
 - Mengubah object mana yang clickable
 - Menambah chip status baru
@@ -101,6 +108,7 @@ Contoh kebutuhan:
 Edit file ini kalau ingin mengubah gambar SLD asli.
 
 Yang penting dijaga:
+
 - Elemen clickable harus punya `data-role="open-close"`
 - Elemen harus punya `data-object="OBJECT_ID"`
 - ID object harus cocok dengan store/model, misalnya:
@@ -115,6 +123,7 @@ Yang penting dijaga:
   - `MW_LINE_AB`
 
 Contoh kebutuhan:
+
 - Memindahkan posisi load di diagram
 - Mengganti label breaker
 - Menambah feeder baru secara visual
@@ -127,6 +136,7 @@ Contoh kebutuhan:
 Edit file ini untuk mengubah isi panel kanan ADS Logic.
 
 Yang diatur di sini:
+
 - Mode tampilan:
   - Operator Guide
   - Manual Pre-arm
@@ -139,6 +149,7 @@ Yang diatur di sini:
 - Footer frequency/load/constraint
 
 Contoh kebutuhan:
+
 - Mengubah copywriting
 - Menambah metrik baru
 - Mengubah urutan blok reasoning
@@ -152,6 +163,7 @@ Contoh kebutuhan:
 Edit file ini untuk panel collapsible bawah cockpit.
 
 Yang diatur di sini:
+
 - Last ADS Action
 - Open / Tripped Loads
 - Operating Hint
@@ -159,6 +171,7 @@ Yang diatur di sini:
 - Protection Note
 
 Contoh kebutuhan:
+
 - Menambah ringkasan trip terakhir
 - Menampilkan active contingency
 - Mengubah drawer menjadi lebih tinggi
@@ -171,6 +184,7 @@ Contoh kebutuhan:
 Edit file ini untuk halaman pengaturan.
 
 Yang diatur di sini:
+
 - Source MW
 - Minimum reserve MW
 - Load list
@@ -182,6 +196,7 @@ Yang diatur di sini:
 - Affected bus per contingency
 
 Contoh kebutuhan:
+
 - Mengubah form layout
 - Menambah setting baru
 - Memecah Settings menjadi tab
@@ -195,6 +210,7 @@ Contoh kebutuhan:
 Edit file ini untuk halaman audit trail.
 
 Yang diatur di sini:
+
 - Daftar event terbaru
 - Jumlah event
 - Jumlah open load
@@ -202,6 +218,7 @@ Yang diatur di sini:
 - Current opened objects
 
 Contoh kebutuhan:
+
 - Menambah timestamp
 - Menambah filter event
 - Menambah export log
@@ -214,6 +231,7 @@ Contoh kebutuhan:
 Edit file ini untuk halaman matrix collapsible.
 
 Yang diatur di sini:
+
 - Daftar contingency
 - Required MW
 - Selected shed MW
@@ -223,6 +241,7 @@ Yang diatur di sini:
 - Alternatives
 
 Contoh kebutuhan:
+
 - Mengubah matrix menjadi tabel penuh
 - Menampilkan semua load sebagai kolom
 - Menambah status blocked/eligible
@@ -236,6 +255,7 @@ Contoh kebutuhan:
 Edit file ini kalau ingin menambah atau mengubah bentuk data.
 
 Yang ada di sini:
+
 - `Feeder`
 - `LoadGroup`
 - `ContingencyRule`
@@ -243,6 +263,7 @@ Yang ada di sini:
 - `AdsDecision`
 
 Contoh kebutuhan:
+
 - Menambah field `criticality`
 - Menambah field `owner`
 - Menambah field `bay`
@@ -253,6 +274,7 @@ Contoh kebutuhan:
 Edit file ini untuk nilai default load.
 
 Yang ada di sini:
+
 - Daftar load
 - Bus load
 - MW default
@@ -261,6 +283,7 @@ Yang ada di sini:
 - Eligibility default
 
 Contoh kebutuhan:
+
 - Menambah load baru
 - Mengubah MW default
 - Mengubah group default
@@ -271,6 +294,7 @@ Contoh kebutuhan:
 Edit file ini untuk nilai default contingency.
 
 Yang ada di sini:
+
 - Daftar contingency
 - Required relief MW
 - Affected buses
@@ -279,6 +303,7 @@ Yang ada di sini:
 - Explanation
 
 Contoh kebutuhan:
+
 - Menambah contingency baru
 - Mengubah MW contingency
 - Mengubah area terdampak
@@ -289,6 +314,7 @@ Contoh kebutuhan:
 Edit file ini kalau ingin mengubah cara ADS memilih load.
 
 Yang diatur di sini:
+
 - Kandidat shedding
 - Urutan group 1 sampai 4
 - Scoring
@@ -298,6 +324,7 @@ Yang diatur di sini:
 - Alasan accepted/rejected
 
 Contoh kebutuhan:
+
 - Mengubah bobot priority
 - Membuat group wajib berurutan
 - Membatasi jumlah CB
@@ -309,6 +336,7 @@ Contoh kebutuhan:
 Edit file ini untuk state runtime dan action.
 
 Yang diatur di sini:
+
 - Feeders runtime
 - Object states
 - Contingency rules runtime
@@ -324,6 +352,7 @@ Yang diatur di sini:
 - Set hover object
 
 Contoh kebutuhan:
+
 - Menambah persistence localStorage
 - Menambah undo/redo
 - Menambah structured event log
@@ -333,21 +362,25 @@ Contoh kebutuhan:
 ## Rekomendasi Urutan Editing
 
 Untuk perubahan visual murni:
+
 1. Edit `src/styles.css`
 2. Kalau struktur HTML perlu berubah, edit komponen terkait
 3. Jalankan build
 
 Untuk perubahan layout halaman:
+
 1. Edit `AppShell.tsx` jika menyangkut navigasi atau komposisi halaman
 2. Edit komponen view terkait
 3. Edit `styles.css`
 
 Untuk perubahan SLD:
+
 1. Edit `public/assets/SLD_ADS_HMI.svg` untuk posisi/gambar
 2. Edit `SldCanvas.tsx` untuk mapping/interaksi
 3. Edit `styles.css` untuk warna/highlight
 
 Untuk perubahan logic ADS:
+
 1. Edit `model.ts` jika perlu field baru
 2. Edit `initialSystem.ts` atau `engine.ts` untuk data default
 3. Edit `solver.ts` untuk algoritma

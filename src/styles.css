@@ -2,7 +2,7 @@
 @source "../src";
 
 /* ============================================================
-   GridDefense ADS — Material 3 Expressive (Dark · Futuristik)
+   Smart ADS — Material 3 Expressive (Dark · Futuristik)
    ============================================================ */
 
 :root {
@@ -303,12 +303,17 @@ button {
 
 .about-button {
   align-items: center;
-  background: radial-gradient(
+  background:
+    radial-gradient(
       circle at 32% 25%,
       rgba(255, 255, 255, 0.18),
       transparent 36%
     ),
-    linear-gradient(180deg, rgba(125, 240, 226, 0.1), rgba(125, 240, 226, 0.035));
+    linear-gradient(
+      180deg,
+      rgba(125, 240, 226, 0.1),
+      rgba(125, 240, 226, 0.035)
+    );
   border: 1px solid var(--m3-outline-strong);
   border-radius: 999px;
   box-shadow:

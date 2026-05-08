@@ -11,7 +11,7 @@ import {
   Settings,
   SlidersHorizontal,
   GitFork,
-  Info,
+  UserStar,
   X,
   Zap,
 } from "lucide-react";
@@ -77,8 +77,8 @@ export function AppShell() {
             <GitFork size={20} strokeWidth={2.5} />
           </span>
           <div>
-            <h1>GridDefense ADS</h1>
-            <p>Smart Defense Reasoning Cockpit</p>
+            <h1>Adaptive Defense Scheme</h1>
+            <p>Smart ADS Reasoning Cockpit</p>
           </div>
         </div>
 
@@ -254,7 +254,7 @@ export function AppShell() {
               }}
               type="button"
             >
-              <Info size={17} strokeWidth={2.7} />
+              <UserStar size={17} strokeWidth={2.7} />
             </button>
           </div>
         </div>
@@ -297,7 +297,9 @@ export function AppShell() {
                 <header
                   aria-label="Drag about developer card"
                   className="about-card-header about-card-drag-handle"
-                  onPointerDown={(event) => aboutDragControls.start(event.nativeEvent)}
+                  onPointerDown={(event) =>
+                    aboutDragControls.start(event.nativeEvent)
+                  }
                 >
                   <span className="about-drag-grip" aria-hidden="true">
                     <span />
@@ -331,9 +333,9 @@ export function AppShell() {
                 </div>
 
                 <p className="about-copy">
-                  GridDefense ADS is a smart defense reasoning cockpit prototype
-                  for visualizing contingency impact, optimized load shedding,
-                  and minimum lost MW decisions.
+                  Smart ADS is a smart defense reasoning cockpit prototype for
+                  visualizing contingency impact, optimized load shedding, and
+                  minimum lost MW decisions.
                 </p>
               </motion.section>
             </motion.div>

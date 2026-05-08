@@ -1,4 +1,4 @@
-# GridDefense ADS Simulator
+# Adaptive Defense Scheme ADS Simulator
 
 Adaptive Defense Scheme Logic simulator for an operator-style HMI Single Line Diagram.
 

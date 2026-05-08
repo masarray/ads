@@ -1,5 +1,5 @@
 {
-  "name": "griddefense-ads-simulator",
+  "name": "smart-ads-simulator",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.23.0",
