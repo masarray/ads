@@ -8,17 +8,18 @@ export function ReasoningRail() {
     requiredReliefMw,
     setRequiredReliefMw,
     feeders,
+    frequencyHz,
   } = useAdsStore();
   const displayDecision = hoverDecision ?? decision;
-  const hasLiveDecision = !hoverDecision && decision.status === "armed";
+  const hasLiveDecision = !hoverDecision && decision.status !== "normal";
   const hasDecisionView = Boolean(hoverDecision || hasLiveDecision);
-  const isExecuted = hoverDecision?.status === "executed";
+  const isExecuted = displayDecision.status === "executed";
   const displayMode = hoverDecision
     ? hoverDecision.status === "executed"
       ? "Trip History"
       : "Contingency Preview"
     : hasLiveDecision
-      ? "Manual Pre-arm"
+      ? decision.mode ?? "ADS Scenario"
       : "Operator Guide";
   const displayRequired = hasDecisionView
     ? displayDecision.requiredReliefMw
@@ -30,10 +31,20 @@ export function ReasoningRail() {
   const selectedNames =
     displayDecision.selected?.feeders
       .map((feeder) => feeder.name)
-      .join(" + ") ?? "No target armed";
+      .join(" + ") ??
+    (displayDecision.status !== "blocked"
+      ? displayDecision.selectedGeneration?.name
+      : undefined) ??
+    "No target armed";
   const selectedMw = displayDecision.selected?.selectedMw ?? 0;
+  const generationMw =
+    displayDecision.status !== "blocked"
+      ? displayDecision.selectedGeneration?.mw ?? 0
+      : 0;
   const overshed = displayDecision.selected?.overshedMw ?? 0;
-  const operations = displayDecision.selected?.feeders.length ?? 0;
+  const operations =
+    displayDecision.selected?.feeders.length ??
+    (displayDecision.selectedGeneration ? 1 : 0);
   const firstAlternative = displayDecision.alternatives[0];
   const rejectedCount =
     displayDecision.alternatives.length + displayDecision.rejected.length;
@@ -66,7 +77,7 @@ export function ReasoningRail() {
         </h2>
         <p className="rail-copy">
           {hasDecisionView
-            ? displayDecision.explanation
+            ? displayDecision.operatorMessage ?? displayDecision.explanation
             : "Hover contingency CB seperti IBT, line, coupler, atau generator. ADS akan menghitung area terdampak, kebutuhan relief MW, lalu memilih load paling aman dengan lost MW minimum."}
         </p>
       </section>
@@ -78,21 +89,21 @@ export function ReasoningRail() {
           key={`score-${displayDecision.constraint}-${displayDecision.status}`}
         >
           <div>
-            <small>{isExecuted ? "Remain" : "Need"}</small>
+            <small>{isExecuted ? "Remain" : "Action Need"}</small>
             <b>
               {remainingNeed}
               <span>MW</span>
             </b>
           </div>
           <div>
-            <small>{isExecuted ? "Tripped" : "Shed"}</small>
+            <small>{displayDecision.selectedGeneration ? "Gen Trip" : isExecuted ? "Tripped" : "Load Shed"}</small>
             <b>
-              {selectedMw}
+              {selectedMw || generationMw}
               <span>MW</span>
             </b>
           </div>
           <div>
-            <small>{isExecuted ? "Cleared" : "Over"}</small>
+            <small>{isExecuted ? "Cleared" : "Overshed"}</small>
             <b>
               {isExecuted ? displayRequired : overshed}
               <span>MW</span>
@@ -154,21 +165,42 @@ export function ReasoningRail() {
 
       {hasDecisionView ? (
         <>
+          {displayDecision.steps?.length ? (
+            <section className="logic-sequence logic-animated">
+              <small>ADS Flow</small>
+              <ol>
+                {displayDecision.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </section>
+          ) : null}
+
           <section
             className="logic-target logic-animated"
-            data-active={displayDecision.selected ? "true" : "false"}
+            data-active={
+              displayDecision.selected || displayDecision.selectedGeneration
+                ? "true"
+                : "false"
+            }
             key={`target-${selectedNames}`}
           >
             <small>
-              {isExecuted ? "Armed and Tripped" : "Selected Target"}
+              {isExecuted || displayDecision.status === "executed"
+                ? "Executed Target"
+                : "Selected Target"}
             </small>
             <h3>{selectedNames}</h3>
             <p>
               {displayDecision.selected
-                ? isExecuted
+                ? isExecuted || displayDecision.status === "executed"
                   ? `${selectedNames} sudah dikirim trip. Relief awal ${displayRequired} MW sudah terpenuhi; tidak ada arming tambahan yang diperlukan.`
                   : displayDecision.selected.reason
-                : "Tidak ada shedding karena sistem masih aman atau belum ada constraint aktif."}
+                : displayDecision.selectedGeneration && displayDecision.status !== "blocked"
+                  ? `${displayDecision.selectedGeneration.name} dipilih untuk ${displayDecision.selectedGeneration.action} sebesar ${displayDecision.selectedGeneration.mw} MW. Final Pgen ${displayDecision.generationAfterMw ?? "-"} MW terhadap Pload ${displayDecision.loadBeforeMw ?? "-"} MW${displayDecision.balanceRatioPct ? `, ratio ${displayDecision.balanceRatioPct.toFixed(1)}%` : ""}.`
+                  : displayDecision.status === "blocked"
+                    ? displayDecision.operatorMessage ?? "ADS blocked karena tidak ada target yang valid untuk constraint ini."
+                  : "Tidak ada shedding karena sistem masih aman atau belum ada constraint aktif."}
             </p>
           </section>
 
@@ -181,6 +213,10 @@ export function ReasoningRail() {
               <p>
                 {displayDecision.selected
                   ? `Area ${displayDecision.affectedBuses?.join("/") ?? "system"} paling relevan, overshed ${overshed} MW, dan hanya ${operations} operasi CB.`
+                  : displayDecision.selectedGeneration && displayDecision.status !== "blocked"
+                    ? `Area ${displayDecision.selectedGeneration.bus} surplus generation. Aksi ${displayDecision.selectedGeneration.action} memberi koreksi ${displayDecision.selectedGeneration.mw} MW dan membawa balance ke ${displayDecision.balanceRatioPct?.toFixed(1) ?? "-"}%.`
+                    : displayDecision.status === "blocked"
+                      ? "ADS menolak eksekusi karena kandidat yang tersedia akan membuat sistem keluar batas aman."
                   : "Tidak ada overload, islanding, atau relief request yang perlu dieksekusi."}
               </p>
             </div>
@@ -189,6 +225,10 @@ export function ReasoningRail() {
               <p>
                 {firstAlternative
                   ? `${rejectedCount} kandidat lain ditolak. ${firstAlternative.feeders.map((feeder) => feeder.name).join(" + ")}: ${firstAlternative.rejection ?? `score lebih buruk, overshed ${firstAlternative.overshedMw} MW.`}`
+                  : displayDecision.selectedGeneration && displayDecision.status !== "blocked"
+                    ? "Load tidak dipilih karena skenario ini adalah OGS: masalahnya surplus pembangkit, sehingga load shedding justru memperburuk overfrequency."
+                    : displayDecision.status === "blocked"
+                      ? "Tidak ada kombinasi lokal yang memenuhi batas area/topologi dan toleransi balance."
                   : "Tidak ada alternatif yang perlu dibandingkan saat sistem normal."}
               </p>
             </div>
@@ -210,6 +250,17 @@ export function ReasoningRail() {
               </ul>
             ) : null}
           </section>
+
+          {displayDecision.passCriteria?.length ? (
+            <section className="logic-pass logic-animated">
+              <small>PASS Check</small>
+              <div>
+                {displayDecision.passCriteria.map((criterion) => (
+                  <span key={criterion}>{criterion}</span>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </>
       ) : (
         <section className="logic-target logic-animated" data-active="true">
@@ -225,7 +276,7 @@ export function ReasoningRail() {
 
       <section className="logic-footer">
         <span>
-          Freq <b>50.00 Hz</b>
+          Freq <b>{frequencyHz.toFixed(2)} Hz</b>
         </span>
         <span>
           Load <b>{totalLoad} MW</b>

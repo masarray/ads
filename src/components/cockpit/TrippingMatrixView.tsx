@@ -1,11 +1,11 @@
 import { ChevronDown, Grid3X3 } from "lucide-react";
-import { previewDecisionForObject } from "../../lib/ads/engine";
 import { useAdsStore } from "../../lib/ads/store";
 import type { LoadGroup } from "../../lib/ads/model";
 
 export function TrippingMatrixView() {
   const feeders = useAdsStore((state) => state.feeders);
   const contingencyRules = useAdsStore((state) => state.contingencyRules);
+  const tripMatrix = useAdsStore((state) => state.tripMatrix);
 
   return (
     <section className="matrix-workspace" aria-label="Tripping matrix">
@@ -31,11 +31,7 @@ export function TrippingMatrixView() {
 
       <div className="matrix-list">
         {Object.entries(contingencyRules).map(([id, rule]) => {
-          const decision = previewDecisionForObject(
-            id,
-            feeders,
-            contingencyRules,
-          );
+          const decision = tripMatrix.rows[id]?.decision ?? null;
           const selectedFeeders = decision?.selected?.feeders ?? [];
           const selectedGroup = selectedFeeders.reduce<LoadGroup | 0>(
             (max, feeder) => Math.max(max, feeder.group) as LoadGroup,

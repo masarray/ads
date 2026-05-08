@@ -1,4 +1,14 @@
-import { Maximize2, Minus, Plus } from "lucide-react";
+import { motion, useDragControls } from "framer-motion";
+import {
+  Activity,
+  Gauge,
+  Grip,
+  Maximize2,
+  Minus,
+  Plus,
+  SlidersHorizontal,
+  Zap,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdsStore } from "../../lib/ads/store";
 
@@ -66,6 +76,8 @@ const maxZoom = 1.35;
 export function SldCanvas() {
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  const powerCardConstraintsRef = useRef<HTMLDivElement>(null);
+  const powerCardDragControls = useDragControls();
   const hoverCommitTimerRef = useRef<number | null>(null);
   const hoverClearTimerRef = useRef<number | null>(null);
   const lastHoverObjectRef = useRef<string | null>(null);
@@ -84,10 +96,55 @@ export function SldCanvas() {
   const contingencyRules = useAdsStore((state) => state.contingencyRules);
   const objectStates = useAdsStore((state) => state.objectStates);
   const decision = useAdsStore((state) => state.decision);
+  const tripMatrix = useAdsStore((state) => state.tripMatrix);
+  const sourceMw = useAdsStore((state) => state.sourceMw);
+  const requiredReliefMw = useAdsStore((state) => state.requiredReliefMw);
+  const frequencyHz = useAdsStore((state) => state.frequencyHz);
   const hoverDecision = useAdsStore((state) => state.hoverDecision);
   const toggleObject = useAdsStore((state) => state.toggleObject);
   const setHoverObject = useAdsStore((state) => state.setHoverObject);
   const displayDecision = hoverDecision ?? decision;
+  const displayNeedMw =
+    displayDecision.status === "normal"
+      ? requiredReliefMw
+      : displayDecision.requiredReliefMw;
+  const demandMw = useMemo(
+    () =>
+      feeders
+        .filter((feeder) => feeder.breakerState === "closed")
+        .reduce((sum, feeder) => sum + feeder.mw, 0),
+    [feeders],
+  );
+  const displaySourceMw = displayDecision.generationBeforeMw ?? sourceMw;
+  const displayDemandMw = displayDecision.loadBeforeMw ?? demandMw;
+  const reserveMw = Math.max(0, displaySourceMw - displayDemandMw);
+  const isOgsView = displayDecision.actionType === "OGS_GENERATOR_SHEDDING";
+  const substationPowerCards = useMemo(
+    () =>
+      [
+        { id: "A", name: "Substation A", x: 240, y: 420 },
+        { id: "B", name: "Substation B", x: 700, y: 29 },
+        { id: "C", name: "Substation C", x: 1350, y: 400 },
+      ].map((card) => {
+        const islands = tripMatrix.topology.islands.filter((island) =>
+          island.buses.includes(card.id as "A" | "B" | "C"),
+        );
+        const source = islands.reduce(
+          (sum, island) => sum + island.sourceMw,
+          0,
+        );
+        const load = islands.reduce((sum, island) => sum + island.loadMw, 0);
+        const reserve = source - load;
+        return {
+          ...card,
+          source,
+          load,
+          reserve,
+          islanded: tripMatrix.topology.islands.length > 1,
+        };
+      }),
+    [tripMatrix],
+  );
   const selectedIds = useMemo(
     () =>
       new Set(
@@ -383,7 +440,11 @@ export function SldCanvas() {
     for (const [objectId, state] of Object.entries(objectStates)) {
       setState(objectId, state === "closed");
       if (objectMwText[objectId]) {
-        const configuredMw = contingencyRules[objectId]?.requiredReliefMw;
+        const useRuleRelief =
+          objectId.startsWith("LINE_") || objectId.startsWith("IBT_");
+        const configuredMw = useRuleRelief
+          ? contingencyRules[objectId]?.requiredReliefMw
+          : undefined;
         setText(
           `MW_${objectId}`,
           state === "open"
@@ -438,6 +499,79 @@ export function SldCanvas() {
       className="sld-stage"
       aria-label="Single line diagram"
     >
+      <div
+        ref={powerCardConstraintsRef}
+        className="power-card-layer"
+        aria-hidden="true"
+      />
+      <motion.aside
+        className="power-flow-card"
+        aria-label="Power flow and ADS calculation"
+        drag
+        dragConstraints={powerCardConstraintsRef}
+        dragControls={powerCardDragControls}
+        dragElastic={0.05}
+        dragListener={false}
+        dragMomentum={false}
+        initial={false}
+      >
+        <header
+          className="power-flow-card__header"
+          onPointerDown={(event) =>
+            powerCardDragControls.start(event.nativeEvent)
+          }
+        >
+          <Grip size={14} />
+          <div>
+            <small>Power Flow</small>
+            <strong>ADS Calculation</strong>
+          </div>
+          <span>{frequencyHz.toFixed(2)} Hz</span>
+        </header>
+
+        <div className="power-flow-metrics">
+          <div>
+            <Activity size={14} />
+            <span>{isOgsView ? "Island Gen" : "Source"}</span>
+            <strong>{displaySourceMw} MW</strong>
+          </div>
+          <div>
+            <SlidersHorizontal size={14} />
+            <span>{isOgsView ? "Island Load" : "Demand"}</span>
+            <strong>{displayDemandMw} MW</strong>
+          </div>
+          <div>
+            <Zap size={14} />
+            <span>Reserve</span>
+            <strong>{reserveMw} MW</strong>
+          </div>
+          <div>
+            <Gauge size={14} />
+            <span>{isOgsView ? "Gen Trip Need" : "Action Need"}</span>
+            <strong>{displayNeedMw} MW</strong>
+          </div>
+        </div>
+
+        <div className="power-flow-story">
+          <small>Why action is needed</small>
+          <p>
+            {displayDecision.imbalanceBasis ??
+              (isOgsView
+                ? "Island generation dibandingkan dengan island load."
+                : "Source memasok demand yang masih closed.")}
+          </p>
+        </div>
+
+        <div className="power-flow-equation">
+          <span>Calculation</span>
+          <b>
+            {displayDecision.imbalanceFormula ??
+              `${isOgsView ? "Island Gen - Load" : "Source - Demand"} = ${reserveMw} MW`}
+          </b>
+          <span>ADS action</span>
+          <b>{displayNeedMw} MW</b>
+        </div>
+      </motion.aside>
       <div className="sld-zoom-toolbar" aria-label="SLD zoom controls">
         <button onClick={fitToStage} type="button" title="Fit all">
           <Maximize2 size={14} />
@@ -472,6 +606,41 @@ export function SldCanvas() {
             transform: `scale(${clampedZoom})`,
           }}
         />
+        {loaded ? (
+          <div
+            className="substation-flow-layer"
+            style={{
+              left: layerOffsetX,
+              top: layerOffsetY,
+              transform: `scale(${clampedZoom})`,
+            }}
+          >
+            {substationPowerCards.map((card) => (
+              <article
+                className={`substation-flow-card ${card.reserve < 0 ? "is-deficit" : "is-healthy"}`}
+                key={card.id}
+                style={{ left: card.x, top: card.y }}
+              >
+                <header>
+                  <span>{card.name}</span>
+                  <b>{card.islanded ? "Island" : "Grid"}</b>
+                </header>
+                <div>
+                  <small>Gen</small>
+                  <strong>{card.source} MW</strong>
+                </div>
+                <div>
+                  <small>Load</small>
+                  <strong>{card.load} MW</strong>
+                </div>
+                <footer>
+                  <small>{card.reserve >= 0 ? "Margin" : "Deficit"}</small>
+                  <strong>{Math.abs(card.reserve)} MW</strong>
+                </footer>
+              </article>
+            ))}
+          </div>
+        ) : null}
         {!loaded ? (
           <div className="sld-empty">
             <div className="sld-empty-card">

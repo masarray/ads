@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
-  Activity,
+  AlertTriangle,
   ChevronDown,
   Gauge,
   GitBranch,
@@ -9,7 +9,6 @@ import {
   ListChecks,
   RotateCcw,
   Settings,
-  SlidersHorizontal,
   GitFork,
   UserStar,
   X,
@@ -52,22 +51,14 @@ const viewVariants = {
 
 export function AppShell() {
   const [activeView, setActiveView] = useState<AppView>("cockpit");
-  const [frequencyHz, setFrequencyHz] = useState(50);
   const [draftFrequencyHz, setDraftFrequencyHz] = useState(48.25);
   const [frequencyOpen, setFrequencyOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const aboutDragConstraintsRef = useRef<HTMLDivElement>(null);
   const aboutDragControls = useDragControls();
   const reset = useAdsStore((state) => state.reset);
-  const requiredReliefMw = useAdsStore((state) => state.requiredReliefMw);
-  const setRequiredReliefMw = useAdsStore((state) => state.setRequiredReliefMw);
-  const demandMw = useAdsStore((state) =>
-    state.feeders
-      .filter((feeder) => feeder.breakerState === "closed")
-      .reduce((sum, feeder) => sum + feeder.mw, 0),
-  );
-  const sourceMw = useAdsStore((state) => state.sourceMw);
-  const reserveMw = Math.max(0, sourceMw - demandMw);
+  const frequencyHz = useAdsStore((state) => state.frequencyHz);
+  const injectScenario = useAdsStore((state) => state.injectScenario);
 
   return (
     <main className="app-shell">
@@ -184,7 +175,7 @@ export function AppShell() {
                   <button
                     className="freq-inject"
                     onClick={() => {
-                      setFrequencyHz(draftFrequencyHz);
+                      injectScenario("frequency_islanding", draftFrequencyHz);
                       setFrequencyOpen(false);
                     }}
                     type="button"
@@ -198,7 +189,7 @@ export function AppShell() {
 
           <button
             className="command-button"
-            onClick={() => setRequiredReliefMw(72)}
+            onClick={() => injectScenario("topology_split")}
             type="button"
           >
             <GitBranch size={16} />
@@ -206,43 +197,31 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
-            onClick={() => setRequiredReliefMw(118)}
+            onClick={() => injectScenario("generation_derate")}
             type="button"
           >
             <Zap size={16} />
             Derate KIT C2
           </button>
+          <button
+            className="command-button"
+            onClick={() => injectScenario("ols_overload")}
+            type="button"
+          >
+            <AlertTriangle size={16} />
+            OLS IBT C
+          </button>
+          <button
+            className="command-button"
+            onClick={() => injectScenario("ogs_surplus")}
+            type="button"
+          >
+            <Gauge size={16} />
+            OGS Island
+          </button>
         </nav>
 
         <div className="topbar-right">
-          <span
-            className="topbar-separator topbar-separator--metrics"
-            aria-hidden="true"
-          />
-
-          <div className="system-strip" aria-label="System balance">
-            <div>
-              <Activity size={14} />
-              <span>Source</span>
-              <strong>{sourceMw} MW</strong>
-            </div>
-            <div>
-              <SlidersHorizontal size={14} />
-              <span>Demand</span>
-              <strong>{demandMw} MW</strong>
-            </div>
-            <div>
-              <Zap size={14} />
-              <span>Reserve</span>
-              <strong>{reserveMw} MW</strong>
-            </div>
-            <div>
-              <Gauge size={14} />
-              <span>Relief</span>
-              <strong>{requiredReliefMw} MW</strong>
-            </div>
-          </div>
-
           <div className="about-control">
             <button
               aria-label="About developer"

@@ -1,4 +1,12 @@
-import type { AdsDecision, Feeder, SheddingCandidate } from "./model";
+import type {
+  AdsDecision,
+  BusId,
+  DefenseActionType,
+  Feeder,
+  GeneratorAction,
+  ScenarioKind,
+  SheddingCandidate,
+} from "./model";
 
 const maxCombinationSize = 4;
 
@@ -6,8 +14,21 @@ interface RankOptions {
   title?: string;
   mode?: string;
   constraint?: string;
-  affectedBuses?: Array<Feeder["bus"]>;
+  affectedBuses?: BusId[];
+  strictAffectedBuses?: boolean;
   explanation?: string;
+  actionType?: DefenseActionType;
+  scenarioKind?: ScenarioKind;
+  detectedCondition?: string;
+  operatorMessage?: string;
+  frequencyHz?: number;
+  frequencyZone?: string;
+  islandGenerationMw?: number;
+  islandLoadMw?: number;
+  imbalanceBasis?: string;
+  imbalanceFormula?: string;
+  steps?: string[];
+  passCriteria?: string[];
 }
 
 export function rankShedding(feeders: Feeder[], requiredReliefMw: number, options: RankOptions = {}): AdsDecision {
@@ -15,31 +36,119 @@ export function rankShedding(feeders: Feeder[], requiredReliefMw: number, option
     return {
       status: "normal",
       requiredReliefMw: 0,
+      actionType: options.actionType,
+      scenarioKind: options.scenarioKind,
       title: options.title,
       mode: options.mode,
       affectedBuses: options.affectedBuses,
+      strictAffectedBuses: options.strictAffectedBuses,
       constraint: options.constraint,
       explanation: options.explanation,
+      detectedCondition: options.detectedCondition,
+      operatorMessage: options.operatorMessage,
+      frequencyHz: options.frequencyHz,
+      frequencyZone: options.frequencyZone,
+      imbalanceBasis: options.imbalanceBasis,
+      imbalanceFormula: options.imbalanceFormula,
+      steps: options.steps,
+      passCriteria: options.passCriteria,
       alternatives: [],
       rejected: []
     };
   }
 
   const eligible = feeders.filter((feeder) => feeder.shedEligible && feeder.breakerState === "closed" && feeder.mw > 0);
-  const candidates = buildGroupedCandidates(eligible, requiredReliefMw, options);
+  const affectedBuses = new Set(options.affectedBuses ?? []);
+  const scopedEligible = options.strictAffectedBuses && affectedBuses.size > 0
+    ? eligible.filter((feeder) => affectedBuses.has(feeder.bus))
+    : eligible;
+  const candidates = buildGroupedCandidates(scopedEligible, requiredReliefMw, options);
   const selected = candidates[0];
 
   return {
     status: selected ? "armed" : "blocked",
     requiredReliefMw,
+    actionType: options.actionType,
+    scenarioKind: options.scenarioKind,
+    title: options.title,
+    mode: options.mode,
+    affectedBuses: options.affectedBuses,
+    strictAffectedBuses: options.strictAffectedBuses,
+    constraint: options.constraint,
+    explanation: options.explanation,
+    detectedCondition: options.detectedCondition,
+    operatorMessage: options.operatorMessage,
+    frequencyHz: options.frequencyHz,
+    frequencyZone: options.frequencyZone,
+    imbalanceBasis: options.imbalanceBasis,
+    imbalanceFormula: options.imbalanceFormula,
+    steps: options.steps,
+    passCriteria: options.passCriteria,
+    selected,
+    alternatives: candidates.slice(1, 5),
+    rejected: candidates.slice(5, 10)
+  };
+}
+
+const generatorActions: GeneratorAction[] = [
+  { id: "GEN_C2", name: "KIT C2 trip", bus: "C", mw: 145, priority: 1, action: "trip" },
+  { id: "GEN_C1", name: "KIT C1 trip", bus: "C", mw: 165, priority: 2, action: "trip" },
+  { id: "GEN_A2", name: "KIT A2 trip", bus: "A", mw: 135, priority: 3, action: "trip" },
+  { id: "GEN_A1", name: "KIT A1 trip", bus: "A", mw: 180, priority: 4, action: "trip" },
+];
+
+export function rankGenerationShedding(requiredReliefMw: number, options: RankOptions = {}): AdsDecision {
+  if (requiredReliefMw <= 0) {
+    return rankShedding([], 0, options);
+  }
+
+  const affectedBuses = new Set(options.affectedBuses ?? []);
+  const islandGenerationMw = options.islandGenerationMw;
+  const islandLoadMw = options.islandLoadMw;
+  const selectedGeneration = [...generatorActions]
+    .filter((generator) => affectedBuses.size === 0 || affectedBuses.has(generator.bus))
+    .sort((left, right) => {
+      if (islandGenerationMw !== undefined && islandLoadMw !== undefined && islandLoadMw > 0) {
+        const leftRatio = ((islandGenerationMw - left.mw) / islandLoadMw) * 100;
+        const rightRatio = ((islandGenerationMw - right.mw) / islandLoadMw) * 100;
+        const leftPass = leftRatio >= 95 && leftRatio <= 105 ? 0 : 1;
+        const rightPass = rightRatio >= 95 && rightRatio <= 105 ? 0 : 1;
+        return leftPass - rightPass || Math.abs(leftRatio - 100) - Math.abs(rightRatio - 100) || left.priority - right.priority;
+      }
+      const leftOvershed = Math.abs(left.mw - requiredReliefMw);
+      const rightOvershed = Math.abs(right.mw - requiredReliefMw);
+      return leftOvershed - rightOvershed || left.priority - right.priority;
+    })[0];
+
+  return {
+    status: selectedGeneration ? "armed" : "blocked",
+    requiredReliefMw,
+    actionType: options.actionType,
+    scenarioKind: options.scenarioKind,
     title: options.title,
     mode: options.mode,
     affectedBuses: options.affectedBuses,
     constraint: options.constraint,
     explanation: options.explanation,
-    selected,
-    alternatives: candidates.slice(1, 5),
-    rejected: candidates.slice(5, 10)
+    detectedCondition: options.detectedCondition,
+    operatorMessage: options.operatorMessage,
+    frequencyHz: options.frequencyHz,
+    frequencyZone: options.frequencyZone,
+    generationBeforeMw: islandGenerationMw,
+    loadBeforeMw: islandLoadMw,
+    generationAfterMw: selectedGeneration && islandGenerationMw !== undefined
+      ? islandGenerationMw - selectedGeneration.mw
+      : undefined,
+    balanceRatioPct: selectedGeneration && islandGenerationMw !== undefined && islandLoadMw
+      ? ((islandGenerationMw - selectedGeneration.mw) / islandLoadMw) * 100
+      : undefined,
+    imbalanceBasis: options.imbalanceBasis,
+    imbalanceFormula: options.imbalanceFormula,
+    steps: options.steps,
+    passCriteria: options.passCriteria,
+    selectedGeneration,
+    alternatives: [],
+    rejected: [],
   };
 }
 
@@ -106,7 +215,7 @@ function explainRejection(
   feeders: Feeder[],
   requiredReliefMw: number,
   overshedMw: number,
-  affectedBuses: Set<Feeder["bus"]>
+  affectedBuses: Set<BusId>
 ): string {
   const remoteMw = feeders
     .filter((feeder) => affectedBuses.size > 0 && !affectedBuses.has(feeder.bus))

@@ -1,5 +1,14 @@
 import { rankShedding } from "./solver";
-import type { AdsDecision, ContingencyRule, Feeder } from "./model";
+import { buildTripMatrix, tripMatrixRowToDecision } from "./matrixEngine";
+import { buildSystemSnapshot } from "./snapshot";
+import type { AdsDecision, BreakerState, ContingencyRule, Feeder, TripMatrix } from "./model";
+
+const generatorGrossMw: Record<string, number> = {
+  GEN_A1: 180,
+  GEN_A2: 135,
+  GEN_C1: 165,
+  GEN_C2: 145,
+};
 
 export const initialContingencyRules: Record<string, ContingencyRule> = {
   IBT_A: {
@@ -63,7 +72,7 @@ export const initialContingencyRules: Record<string, ContingencyRule> = {
     affectedBuses: ["A", "B"],
     requiredReliefMw: 95,
     explanation:
-      "Jika KIT A1 turun, defisit paling terasa di area A/B. ADS memilih load prioritas rendah sebelum beban kritikal.",
+      "KIT A1 kehilangan output 180 MW, tetapi sebagian ditutup reserve/import support. ADS hanya mencari load shedding untuk sisa defisit 95 MW.",
   },
   GEN_A2: {
     title: "KIT A2 Loss of Generation",
@@ -72,7 +81,7 @@ export const initialContingencyRules: Record<string, ContingencyRule> = {
     affectedBuses: ["A", "B"],
     requiredReliefMw: 74,
     explanation:
-      "KIT A2 loss membutuhkan relief sedang di area A/B dengan overshed minimum.",
+      "KIT A2 kehilangan output 135 MW, tetapi action need setelah support adalah 74 MW dengan overshed minimum.",
   },
   GEN_C1: {
     title: "KIT C1 Loss of Generation",
@@ -81,7 +90,7 @@ export const initialContingencyRules: Record<string, ContingencyRule> = {
     affectedBuses: ["C", "B"],
     requiredReliefMw: 90,
     explanation:
-      "KIT C1 loss lebih aman ditangani oleh kombinasi C/B agar transfer dari area lain tidak membesar.",
+      "KIT C1 kehilangan output 165 MW, tetapi reserve/import support menutup sebagian. ADS mencari kombinasi C/B untuk sisa defisit 90 MW.",
   },
   GEN_C2: {
     title: "KIT C2 Loss of Generation",
@@ -90,7 +99,7 @@ export const initialContingencyRules: Record<string, ContingencyRule> = {
     affectedBuses: ["C", "B"],
     requiredReliefMw: 80,
     explanation:
-      "KIT C2 derate/loss memerlukan shedding C/B yang cukup tanpa melepas beban terlalu banyak.",
+      "KIT C2 kehilangan output 145 MW, tetapi action need setelah support adalah 80 MW di area C/B.",
   },
 };
 
@@ -98,13 +107,57 @@ export function previewDecisionForObject(
   objectId: string | null,
   feeders: Feeder[],
   rules: Record<string, ContingencyRule> = initialContingencyRules,
+  objectStates?: Record<string, BreakerState>,
 ): AdsDecision | null {
   if (!objectId) return null;
   if (feeders.some((feeder) => feeder.id === objectId)) return null;
 
-  const rule = rules[objectId];
-  if (!rule) return null;
-  return rankShedding(feeders, rule.requiredReliefMw, rule);
+  const matrix = buildTripMatrixForState(feeders, objectStates ?? buildObjectStatesFromFeeders(feeders), rules);
+  return tripMatrixRowToDecision(matrix.rows[objectId]);
+}
+
+export function buildTripMatrixForState(
+  feeders: Feeder[],
+  objectStates: Record<string, BreakerState>,
+  rules: Record<string, ContingencyRule> = initialContingencyRules,
+  sourceMw = 625,
+  minReserveMw = 80,
+  frequencyHz = 50,
+): TripMatrix {
+  return buildTripMatrix(
+    buildSystemSnapshot({
+      feeders,
+      objectStates,
+      contingencyRules: rules,
+      sourceMw,
+      minReserveMw,
+      frequencyHz,
+    }),
+  );
+}
+
+function enrichRuleContext(objectId: string, rule: ContingencyRule): ContingencyRule {
+  if (rule.actionType) return rule;
+
+  if (objectId.startsWith("GEN_")) {
+    const grossLossMw = generatorGrossMw[objectId] ?? rule.requiredReliefMw;
+    const coveredMw = Math.max(0, grossLossMw - rule.requiredReliefMw);
+    return {
+      ...rule,
+      actionType: "DEFICIT_LOAD_SHEDDING",
+      scenarioKind: "generation_derate",
+      imbalanceBasis: `${rule.title}: angka pada SLD adalah output generator ${grossLossMw} MW. ADS tidak selalu shed sebesar itu karena reserve/import support masih bisa menutup ${coveredMw} MW.`,
+      imbalanceFormula: `Action need = gen loss ${grossLossMw} - covered ${coveredMw} = ${rule.requiredReliefMw} MW`,
+    };
+  }
+
+  return {
+    ...rule,
+    actionType: "OLS_LOAD_SHEDDING",
+    scenarioKind: "ols_overload",
+    imbalanceBasis: `${rule.constraint} diperkirakan overload. Load di area ${rule.affectedBuses.join("/")} dipilih karena paling langsung menurunkan arus/transfer pada constraint ini.`,
+    imbalanceFormula: `Required action = estimated overload relief ${rule.requiredReliefMw} MW`,
+  };
 }
 
 export function isContingencyObject(
@@ -125,7 +178,7 @@ export function decisionForOpenContingencies(
   if (openContingencies.length === 0) return null;
 
   const ranked = openContingencies
-    .map((id) => previewDecisionForObject(id, feeders, rules))
+    .map((id) => previewDecisionForObject(id, feeders, rules, normalizeObjectStates(objectStates, feeders)))
     .filter((decision): decision is AdsDecision => Boolean(decision))
     .sort((left, right) => right.requiredReliefMw - left.requiredReliefMw);
 
@@ -136,4 +189,26 @@ export function decisionForOpenContingencies(
         mode: "LIVE ADS EXECUTION",
       }
     : null;
+}
+
+function buildObjectStatesFromFeeders(feeders: Feeder[]): Record<string, BreakerState> {
+  return Object.fromEntries([
+    ...Object.keys(initialContingencyRules).map((id) => [id, "closed" as BreakerState]),
+    ...feeders.map((feeder) => [feeder.id, feeder.breakerState]),
+  ]);
+}
+
+function normalizeObjectStates(
+  objectStates: Record<string, string>,
+  feeders: Feeder[],
+): Record<string, BreakerState> {
+  return {
+    ...buildObjectStatesFromFeeders(feeders),
+    ...Object.fromEntries(
+      Object.entries(objectStates).map(([id, state]) => [
+        id,
+        state === "open" || state === "failed" ? state : "closed",
+      ]),
+    ),
+  };
 }
