@@ -393,7 +393,15 @@ button {
 }
 
 .about-backdrop {
-  background: transparent;
+  background:
+    radial-gradient(
+      520px 360px at 50% 42%,
+      rgba(125, 240, 226, 0.1),
+      transparent 66%
+    ),
+    rgba(1, 6, 5, 0.2);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   border: 0;
   cursor: default;
   inset: 0;
@@ -402,7 +410,17 @@ button {
   z-index: 58;
 }
 
-.about-popover {
+.about-floating-layer {
+  display: grid;
+  inset: 0;
+  padding: 78px 18px 24px;
+  place-items: center;
+  pointer-events: none;
+  position: fixed;
+  z-index: 70;
+}
+
+.about-floating-card {
   background:
     radial-gradient(
       280px 180px at 18% 0%,
@@ -422,17 +440,18 @@ button {
   box-shadow: var(--m3-elev-3), var(--m3-elev-glow);
   display: grid;
   gap: 12px;
-  min-width: 340px;
+  max-width: calc(100vw - 32px);
+  min-width: min(400px, calc(100vw - 32px));
   overflow: hidden;
   padding: 16px;
-  position: absolute;
-  right: 0;
-  top: 48px;
-  transform-origin: top right;
-  z-index: 70;
+  pointer-events: auto;
+  position: relative;
+  user-select: none;
+  width: min(420px, calc(100vw - 32px));
+  will-change: transform;
 }
 
-.about-popover::before {
+.about-floating-card::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -447,10 +466,36 @@ button {
   border-bottom: 1px solid var(--m3-outline);
   display: grid;
   gap: 12px;
-  grid-template-columns: 48px 1fr auto;
+  grid-template-columns: 16px 48px 1fr auto;
   margin: -16px -16px 0;
   padding: 16px 16px 13px;
   position: relative;
+}
+
+.about-card-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.about-card-drag-handle:active {
+  cursor: grabbing;
+}
+
+.about-drag-grip {
+  align-items: center;
+  display: inline-grid;
+  gap: 3px;
+  justify-items: center;
+  opacity: 0.7;
+}
+
+.about-drag-grip span {
+  background: rgba(125, 240, 226, 0.64);
+  border-radius: 999px;
+  box-shadow: 0 0 8px rgba(125, 240, 226, 0.4);
+  display: block;
+  height: 3px;
+  width: 13px;
 }
 
 .about-avatar {
@@ -503,12 +548,14 @@ button {
   display: inline-flex;
   height: 30px;
   justify-content: center;
+  position: relative;
   transition:
     background var(--m3-dur-short) var(--m3-easing),
     border-color var(--m3-dur-short) var(--m3-easing),
     color var(--m3-dur-short) var(--m3-easing),
     transform var(--m3-dur-short) var(--m3-easing);
   width: 30px;
+  z-index: 1;
 }
 
 .about-close:hover {
@@ -2411,9 +2458,11 @@ button {
   .about-control {
     margin-left: auto;
   }
-  .about-popover {
-    max-width: calc(100vw - 32px);
+  .about-floating-layer {
+    padding: 96px 16px 24px;
+  }
+  .about-floating-card {
     min-width: min(340px, calc(100vw - 32px));
-    right: 0;
+    width: min(360px, calc(100vw - 32px));
   }
 }

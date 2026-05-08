@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
   Activity,
   ChevronDown,
@@ -56,6 +56,8 @@ export function AppShell() {
   const [draftFrequencyHz, setDraftFrequencyHz] = useState(48.25);
   const [frequencyOpen, setFrequencyOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const aboutDragConstraintsRef = useRef<HTMLDivElement>(null);
+  const aboutDragControls = useDragControls();
   const reset = useAdsStore((state) => state.reset);
   const requiredReliefMw = useAdsStore((state) => state.requiredReliefMw);
   const setRequiredReliefMw = useAdsStore((state) => state.setRequiredReliefMw);
@@ -75,8 +77,8 @@ export function AppShell() {
             <GitFork size={20} strokeWidth={2.5} />
           </span>
           <div>
-            <h1>Adaptive Defense Scheme</h1>
-            <p>Smart ADS Reasoning Cockpit</p>
+            <h1>GridDefense ADS</h1>
+            <p>Smart Defense Reasoning Cockpit</p>
           </div>
         </div>
 
@@ -254,66 +256,90 @@ export function AppShell() {
             >
               <Info size={17} strokeWidth={2.7} />
             </button>
-
-            <AnimatePresence>
-              {aboutOpen ? (
-                <>
-                  <motion.button
-                    aria-label="Close about developer"
-                    className="about-backdrop"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setAboutOpen(false)}
-                    type="button"
-                  />
-                  <motion.section
-                    aria-label="About Ari Sulistiono"
-                    className="about-popover"
-                    initial={{ opacity: 0, scale: 0.92, y: -8 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.94, y: -6 }}
-                    transition={{ duration: 0.22, ease: [0.3, 0, 0, 1] }}
-                  >
-                    <header className="about-card-header">
-                      <span className="about-avatar">AS</span>
-                      <div>
-                        <small>Developed by</small>
-                        <h3>Ari Sulistiono</h3>
-                      </div>
-                      <button
-                        aria-label="Close developer card"
-                        className="about-close"
-                        onClick={() => setAboutOpen(false)}
-                        type="button"
-                      >
-                        <X size={15} />
-                      </button>
-                    </header>
-
-                    <p className="about-role">
-                      Substation Automation Engineer · Digital Substation Tools
-                    </p>
-
-                    <div className="about-chips">
-                      <span>ADS Logic</span>
-                      <span>IEC 61850</span>
-                      <span>Protection</span>
-                      <span>SCADA</span>
-                    </div>
-
-                    <p className="about-copy">
-                      GridDefense ADS is a smart defense reasoning cockpit
-                      prototype for visualizing contingency impact, optimized
-                      load shedding, and minimum lost MW decisions.
-                    </p>
-                  </motion.section>
-                </>
-              ) : null}
-            </AnimatePresence>
           </div>
         </div>
       </header>
+
+      <AnimatePresence>
+        {aboutOpen ? (
+          <>
+            <motion.button
+              aria-label="Close about developer"
+              className="about-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAboutOpen(false)}
+              type="button"
+            />
+            <motion.div
+              ref={aboutDragConstraintsRef}
+              className="about-floating-layer"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.3, 0, 0, 1] }}
+            >
+              <motion.section
+                aria-label="About Ari Sulistiono"
+                className="about-floating-card"
+                drag
+                dragConstraints={aboutDragConstraintsRef}
+                dragControls={aboutDragControls}
+                dragElastic={0.07}
+                dragListener={false}
+                dragMomentum={false}
+                initial={{ opacity: 0, scale: 0.88, y: 18 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 10 }}
+                transition={{ duration: 0.24, ease: [0.3, 0, 0, 1] }}
+              >
+                <header
+                  aria-label="Drag about developer card"
+                  className="about-card-header about-card-drag-handle"
+                  onPointerDown={(event) => aboutDragControls.start(event.nativeEvent)}
+                >
+                  <span className="about-drag-grip" aria-hidden="true">
+                    <span />
+                    <span />
+                  </span>
+                  <span className="about-avatar">AS</span>
+                  <div>
+                    <small>Developed by</small>
+                    <h3>Ari Sulistiono</h3>
+                  </div>
+                  <button
+                    aria-label="Close developer card"
+                    className="about-close"
+                    onClick={() => setAboutOpen(false)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    type="button"
+                  >
+                    <X size={15} />
+                  </button>
+                </header>
+
+                <p className="about-role">
+                  Substation Automation Engineer · Digital Substation Tools
+                </p>
+
+                <div className="about-chips">
+                  <span>ADS Logic</span>
+                  <span>IEC 61850</span>
+                  <span>Protection</span>
+                  <span>SCADA</span>
+                </div>
+
+                <p className="about-copy">
+                  GridDefense ADS is a smart defense reasoning cockpit prototype
+                  for visualizing contingency impact, optimized load shedding,
+                  and minimum lost MW decisions.
+                </p>
+              </motion.section>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
