@@ -10,7 +10,7 @@ import {
   RotateCcw,
   Settings,
   SlidersHorizontal,
-  Waves,
+  GitFork,
   Zap,
 } from "lucide-react";
 import { ReasoningRail } from "./ReasoningRail";
@@ -23,8 +23,8 @@ import { useAdsStore } from "../../lib/ads/store";
 
 type AppView = "cockpit" | "settings" | "events" | "matrix";
 
-const navItems: Array<{ id: AppView; label: string; icon: typeof Waves }> = [
-  { id: "cockpit", label: "Cockpit", icon: Waves },
+const navItems: Array<{ id: AppView; label: string; icon: typeof GitFork }> = [
+  { id: "cockpit", label: "Cockpit", icon: GitFork },
   { id: "settings", label: "Settings", icon: Settings },
   { id: "events", label: "Event Log", icon: ListChecks },
   { id: "matrix", label: "Matrix", icon: Grid3X3 },
@@ -69,7 +69,7 @@ export function AppShell() {
       <header className="top-app-bar">
         <div className="brand-lockup">
           <span className="brand-mark">
-            <Waves size={20} strokeWidth={2.5} />
+            <GitFork size={20} strokeWidth={2.5} />
           </span>
           <div>
             <h1>GridDefense ADS</h1>
