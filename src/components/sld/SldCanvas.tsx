@@ -23,7 +23,7 @@ const feederElementMap: Record<string, string[]> = {
   LOAD_C3: ["LOAD_C3", "Arrow 9"],
   LOAD_C1: ["LOAD_C1", "Arrow 10"],
   LOAD_C2: ["LOAD_C2", "Arrow 11"],
-  LOAD_C5: ["LOAD_C5", "Arrow 12"]
+  LOAD_C5: ["LOAD_C5", "Arrow 12"],
 };
 
 const breakerNames: Record<string, string> = {
@@ -36,7 +36,7 @@ const breakerNames: Record<string, string> = {
   GEN_A1: "Generator A1",
   GEN_A2: "Generator A2",
   GEN_C1: "Generator C1",
-  GEN_C2: "Generator C2"
+  GEN_C2: "Generator C2",
 };
 
 const objectMwText: Record<string, string> = {
@@ -49,14 +49,14 @@ const objectMwText: Record<string, string> = {
   GEN_A1: "180 MW",
   GEN_A2: "135 MW",
   GEN_C1: "165 MW",
-  GEN_C2: "145 MW"
+  GEN_C2: "145 MW",
 };
 
 const sldViewBox = {
   x: 35,
   y: 170,
   width: 1850,
-  height: 840
+  height: 840,
 };
 const sldNativeWidth = sldViewBox.width;
 const sldNativeHeight = sldViewBox.height;
@@ -74,7 +74,12 @@ export function SldCanvas() {
   const [zoom, setZoom] = useState(0.7);
   const [zoomMode, setZoomMode] = useState<"fit" | "manual">("fit");
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; body: string } | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    title: string;
+    body: string;
+  } | null>(null);
   const feeders = useAdsStore((state) => state.feeders);
   const contingencyRules = useAdsStore((state) => state.contingencyRules);
   const objectStates = useAdsStore((state) => state.objectStates);
@@ -84,8 +89,13 @@ export function SldCanvas() {
   const setHoverObject = useAdsStore((state) => state.setHoverObject);
   const displayDecision = hoverDecision ?? decision;
   const selectedIds = useMemo(
-    () => new Set((hoverDecision ?? decision).selected?.feeders.map((feeder) => feeder.id) ?? []),
-    [decision, hoverDecision]
+    () =>
+      new Set(
+        (hoverDecision ?? decision).selected?.feeders.map(
+          (feeder) => feeder.id,
+        ) ?? [],
+      ),
+    [decision, hoverDecision],
   );
   const clampedZoom = Math.min(maxZoom, Math.max(minZoom, zoom));
   const scaledWidth = sldNativeWidth * clampedZoom;
@@ -101,7 +111,11 @@ export function SldCanvas() {
 
     const viewportWidth = Math.max(1, stage.clientWidth - 18);
     const viewportHeight = Math.max(1, stage.clientHeight - 18);
-    const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.99;
+    const nextFitZoom =
+      Math.min(
+        viewportWidth / sldNativeWidth,
+        viewportHeight / sldNativeHeight,
+      ) * 0.99;
     const nextZoom = Math.min(maxZoom, Math.max(minZoom, nextFitZoom));
 
     setFitZoom(nextZoom);
@@ -110,8 +124,14 @@ export function SldCanvas() {
 
     window.requestAnimationFrame(() => {
       if (!stageRef.current) return;
-      stageRef.current.scrollLeft = Math.max(0, (sldNativeWidth * nextZoom - stageRef.current.clientWidth) / 2);
-      stageRef.current.scrollTop = Math.max(0, (sldNativeHeight * nextZoom - stageRef.current.clientHeight) / 2);
+      stageRef.current.scrollLeft = Math.max(
+        0,
+        (sldNativeWidth * nextZoom - stageRef.current.clientWidth) / 2,
+      );
+      stageRef.current.scrollTop = Math.max(
+        0,
+        (sldNativeHeight * nextZoom - stageRef.current.clientHeight) / 2,
+      );
     });
   }, []);
 
@@ -128,7 +148,11 @@ export function SldCanvas() {
       setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
       const viewportWidth = Math.max(1, stage.clientWidth - 18);
       const viewportHeight = Math.max(1, stage.clientHeight - 18);
-      const nextFitZoom = Math.min(viewportWidth / sldNativeWidth, viewportHeight / sldNativeHeight) * 0.99;
+      const nextFitZoom =
+        Math.min(
+          viewportWidth / sldNativeWidth,
+          viewportHeight / sldNativeHeight,
+        ) * 0.99;
       const nextZoom = Math.min(maxZoom, Math.max(minZoom, nextFitZoom));
       setFitZoom(nextZoom);
       if (zoomMode === "fit") setZoom(nextZoom);
@@ -147,12 +171,24 @@ export function SldCanvas() {
     let mounted = true;
 
     fetch(`${import.meta.env.BASE_URL}assets/SLD_ADS_HMI.svg`)
-      .then((response) => response.text())
-      .then((markup) => {
-        if (mounted && hostRef.current) {
-          hostRef.current.innerHTML = markup;
-          setLoaded(true);
+      .then((response) => {
+        if (!response.ok) throw new Error(`SVG ${response.status}`);
+        const ct = response.headers.get("content-type") ?? "";
+        if (
+          !ct.includes("svg") &&
+          !ct.includes("xml") &&
+          !ct.includes("text")
+        ) {
+          throw new Error("Not an SVG response");
         }
+        return response.text();
+      })
+      .then((markup) => {
+        if (!mounted || !hostRef.current) return;
+        if (!markup.trim().startsWith("<"))
+          throw new Error("Invalid SVG markup");
+        hostRef.current.innerHTML = markup;
+        setLoaded(true);
       })
       .catch(() => {
         if (mounted) setLoaded(false);
@@ -160,8 +196,10 @@ export function SldCanvas() {
 
     return () => {
       mounted = false;
-      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
-      if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+      if (hoverCommitTimerRef.current)
+        window.clearTimeout(hoverCommitTimerRef.current);
+      if (hoverClearTimerRef.current)
+        window.clearTimeout(hoverClearTimerRef.current);
     };
   }, []);
 
@@ -173,14 +211,22 @@ export function SldCanvas() {
     root.setAttribute("preserveAspectRatio", "xMidYMid meet");
     root.setAttribute("shape-rendering", "geometricPrecision");
     root.setAttribute("text-rendering", "geometricPrecision");
-    root.setAttribute("viewBox", `${sldViewBox.x} ${sldViewBox.y} ${sldViewBox.width} ${sldViewBox.height}`);
+    root.setAttribute(
+      "viewBox",
+      `${sldViewBox.x} ${sldViewBox.y} ${sldViewBox.width} ${sldViewBox.height}`,
+    );
     root.setAttribute("width", String(sldNativeWidth));
     root.setAttribute("height", String(sldNativeHeight));
     root.classList.add("ads-sld-svg");
-    root.querySelectorAll<SVGGraphicsElement>("[data-role='open-close']").forEach((element) => {
-      element.setAttribute("tabindex", "0");
-      element.setAttribute("aria-label", `Toggle ${element.getAttribute("data-object") ?? element.id}`);
-    });
+    root
+      .querySelectorAll<SVGGraphicsElement>("[data-role='open-close']")
+      .forEach((element) => {
+        element.setAttribute("tabindex", "0");
+        element.setAttribute(
+          "aria-label",
+          `Toggle ${element.getAttribute("data-object") ?? element.id}`,
+        );
+      });
 
     const describe = (objectId: string) => {
       const feeder = feeders.find((item) => item.id === objectId);
@@ -195,7 +241,8 @@ export function SldCanvas() {
       const node = target.closest<SVGElement>("[data-role='open-close']");
       const objectId = node?.getAttribute("data-object") ?? node?.id;
       if (!objectId) return;
-      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      if (hoverCommitTimerRef.current)
+        window.clearTimeout(hoverCommitTimerRef.current);
       lastHoverObjectRef.current = objectId;
       setHoverObject(objectId);
       toggleObject(objectId);
@@ -207,19 +254,23 @@ export function SldCanvas() {
       const objectId = node?.getAttribute("data-object") ?? node?.id;
       if (!objectId) {
         setTooltip(null);
-        if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
-        if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+        if (hoverCommitTimerRef.current)
+          window.clearTimeout(hoverCommitTimerRef.current);
+        if (hoverClearTimerRef.current)
+          window.clearTimeout(hoverClearTimerRef.current);
         hoverClearTimerRef.current = window.setTimeout(() => {
           lastHoverObjectRef.current = null;
           setHoverObject(null);
         }, 180);
         return;
       }
-      if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+      if (hoverClearTimerRef.current)
+        window.clearTimeout(hoverClearTimerRef.current);
       const copy = describe(objectId);
       setTooltip({ x: event.clientX, y: event.clientY, ...copy });
       if (lastHoverObjectRef.current === objectId) return;
-      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
+      if (hoverCommitTimerRef.current)
+        window.clearTimeout(hoverCommitTimerRef.current);
       lastHoverObjectRef.current = null;
       setHoverObject(null);
       hoverCommitTimerRef.current = window.setTimeout(() => {
@@ -230,8 +281,10 @@ export function SldCanvas() {
 
     const onPointerLeave = () => {
       setTooltip(null);
-      if (hoverCommitTimerRef.current) window.clearTimeout(hoverCommitTimerRef.current);
-      if (hoverClearTimerRef.current) window.clearTimeout(hoverClearTimerRef.current);
+      if (hoverCommitTimerRef.current)
+        window.clearTimeout(hoverCommitTimerRef.current);
+      if (hoverClearTimerRef.current)
+        window.clearTimeout(hoverClearTimerRef.current);
       hoverClearTimerRef.current = window.setTimeout(() => {
         lastHoverObjectRef.current = null;
         setHoverObject(null);
@@ -254,13 +307,24 @@ export function SldCanvas() {
     if (!root || !loaded) return;
 
     root
-      .querySelectorAll(".svg-armed,.svg-selected,.svg-tripped,.svg-open,.cb-open,.cb-closed,.feeder-on,.feeder-off,.runtime-trip-chip")
+      .querySelectorAll(
+        ".svg-armed,.svg-selected,.svg-tripped,.svg-open,.cb-open,.cb-closed,.feeder-on,.feeder-off,.runtime-trip-chip",
+      )
       .forEach((element) => {
         if (element.classList.contains("runtime-trip-chip")) {
           element.remove();
           return;
         }
-        element.classList.remove("svg-armed", "svg-selected", "svg-tripped", "svg-open", "cb-open", "cb-closed", "feeder-on", "feeder-off");
+        element.classList.remove(
+          "svg-armed",
+          "svg-selected",
+          "svg-tripped",
+          "svg-open",
+          "cb-open",
+          "cb-closed",
+          "feeder-on",
+          "feeder-off",
+        );
       });
 
     const setText = (id: string, value: string) => {
@@ -269,11 +333,13 @@ export function SldCanvas() {
     };
 
     const setState = (objectId: string, isClosed: boolean) => {
-      root.querySelectorAll(`[data-object="${CSS.escape(objectId)}"]`).forEach((node) => {
-        node.setAttribute("data-state", isClosed ? "closed" : "open");
-        node.classList.add(isClosed ? "cb-closed" : "cb-open");
-        if (!isClosed) node.classList.add("svg-open", "svg-tripped");
-      });
+      root
+        .querySelectorAll(`[data-object="${CSS.escape(objectId)}"]`)
+        .forEach((node) => {
+          node.setAttribute("data-state", isClosed ? "closed" : "open");
+          node.classList.add(isClosed ? "cb-closed" : "cb-open");
+          if (!isClosed) node.classList.add("svg-open", "svg-tripped");
+        });
 
       for (const mappedId of feederElementMap[objectId] ?? [objectId]) {
         const mapped = root.querySelector(`#${CSS.escape(mappedId)}`);
@@ -293,13 +359,19 @@ export function SldCanvas() {
       const chip = document.createElementNS("http://www.w3.org/2000/svg", "g");
       chip.setAttribute("class", "runtime-trip-chip");
       chip.setAttribute("data-chip-for", objectId);
-      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      const rect = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "rect",
+      );
       rect.setAttribute("x", String(centerX - 20));
       rect.setAttribute("y", String(centerY - 8));
       rect.setAttribute("width", "40");
       rect.setAttribute("height", "16");
       rect.setAttribute("rx", "8");
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      const text = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text",
+      );
       text.setAttribute("x", String(centerX));
       text.setAttribute("y", String(centerY + 3));
       text.setAttribute("text-anchor", "middle");
@@ -312,39 +384,78 @@ export function SldCanvas() {
       setState(objectId, state === "closed");
       if (objectMwText[objectId]) {
         const configuredMw = contingencyRules[objectId]?.requiredReliefMw;
-        setText(`MW_${objectId}`, state === "open" ? "0 MW" : `${configuredMw ?? objectMwText[objectId].replace(" MW", "")} MW`);
+        setText(
+          `MW_${objectId}`,
+          state === "open"
+            ? "0 MW"
+            : `${configuredMw ?? objectMwText[objectId].replace(" MW", "")} MW`,
+        );
       }
       if (state === "open") {
-        const node = root.querySelector(`[data-role="open-close"][data-object="${CSS.escape(objectId)}"]`);
+        const node = root.querySelector(
+          `[data-role="open-close"][data-object="${CSS.escape(objectId)}"]`,
+        );
         if (node) addTripChip(node, objectId);
       }
     }
 
     for (const feeder of feeders) {
-      setText(`MW_${feeder.id}`, `${feeder.breakerState === "closed" ? feeder.mw : 0} MW`);
-      if (hoverDecision && hoverDecision.status !== "executed" && selectedIds.has(feeder.id)) {
-        root.querySelectorAll(`[data-object="${CSS.escape(feeder.id)}"]`).forEach((node) => {
-          node.classList.add("svg-armed", "svg-selected");
-        });
+      setText(
+        `MW_${feeder.id}`,
+        `${feeder.breakerState === "closed" ? feeder.mw : 0} MW`,
+      );
+      if (
+        hoverDecision &&
+        hoverDecision.status !== "executed" &&
+        selectedIds.has(feeder.id)
+      ) {
+        root
+          .querySelectorAll(`[data-object="${CSS.escape(feeder.id)}"]`)
+          .forEach((node) => {
+            node.classList.add("svg-armed", "svg-selected");
+          });
         for (const mappedId of feederElementMap[feeder.id] ?? [feeder.id]) {
-          root.querySelector(`#${CSS.escape(mappedId)}`)?.classList.add("svg-armed", "svg-selected");
+          root
+            .querySelector(`#${CSS.escape(mappedId)}`)
+            ?.classList.add("svg-armed", "svg-selected");
         }
       }
     }
-  }, [contingencyRules, decision, displayDecision, feeders, hoverDecision, loaded, objectStates, selectedIds]);
+  }, [
+    contingencyRules,
+    decision,
+    displayDecision,
+    feeders,
+    hoverDecision,
+    loaded,
+    objectStates,
+    selectedIds,
+  ]);
 
   return (
-    <section ref={stageRef} className="sld-stage" aria-label="Single line diagram">
+    <section
+      ref={stageRef}
+      className="sld-stage"
+      aria-label="Single line diagram"
+    >
       <div className="sld-zoom-toolbar" aria-label="SLD zoom controls">
         <button onClick={fitToStage} type="button" title="Fit all">
           <Maximize2 size={14} />
           Fit
         </button>
-        <button onClick={() => setManualZoom(clampedZoom - 0.1)} type="button" title="Zoom out">
+        <button
+          onClick={() => setManualZoom(clampedZoom - 0.1)}
+          type="button"
+          title="Zoom out"
+        >
           <Minus size={14} />
         </button>
         <span>{Math.round(clampedZoom * 100)}%</span>
-        <button onClick={() => setManualZoom(clampedZoom + 0.1)} type="button" title="Zoom in">
+        <button
+          onClick={() => setManualZoom(clampedZoom + 0.1)}
+          type="button"
+          title="Zoom in"
+        >
           <Plus size={14} />
         </button>
       </div>
@@ -358,12 +469,28 @@ export function SldCanvas() {
           style={{
             left: layerOffsetX,
             top: layerOffsetY,
-            transform: `scale(${clampedZoom})`
+            transform: `scale(${clampedZoom})`,
           }}
         />
+        {!loaded ? (
+          <div className="sld-empty">
+            <div className="sld-empty-card">
+              <h3>SLD belum termuat</h3>
+              <p>
+                Letakkan file <code>SLD_ADS_HMI.svg</code> di folder{" "}
+                <code>public/assets/</code> untuk menampilkan single line
+                diagram. Reasoning rail, event log, dan matrix tetap berjalan
+                tanpa SVG.
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
       {tooltip ? (
-        <div className="sld-tooltip" style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}>
+        <div
+          className="sld-tooltip"
+          style={{ left: tooltip.x + 14, top: tooltip.y + 14 }}
+        >
           <strong>{tooltip.title}</strong>
           <span>{tooltip.body}</span>
         </div>

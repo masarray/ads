@@ -9,11 +9,14 @@ export function EventLogView() {
   const contingencyRules = useAdsStore((state) => state.contingencyRules);
   const openFeeders = useMemo(
     () => feeders.filter((feeder) => feeder.breakerState === "open"),
-    [feeders]
+    [feeders],
   );
   const openContingencies = useMemo(
-    () => Object.entries(objectStates).filter(([id, value]) => id in contingencyRules && value === "open"),
-    [contingencyRules, objectStates]
+    () =>
+      Object.entries(objectStates).filter(
+        ([id, value]) => id in contingencyRules && value === "open",
+      ),
+    [contingencyRules, objectStates],
   );
 
   return (
@@ -22,12 +25,22 @@ export function EventLogView() {
         <div>
           <small>Audit Trail</small>
           <h2>Event Log</h2>
-          <p>Riwayat operasi CB, contingency, dan ADS trip command dalam urutan terbaru supaya validasi percobaan random lebih mudah dibaca.</p>
+          <p>
+            Riwayat operasi CB, contingency, dan ADS trip command dalam urutan
+            terbaru supaya validasi percobaan random lebih mudah dibaca.
+          </p>
         </div>
         <div className="config-summary">
-          <span><ClipboardList size={14} /> Events <b>{eventLog.length}</b></span>
-          <span><BadgeCheck size={14} /> Open loads <b>{openFeeders.length}</b></span>
-          <span><BadgeCheck size={14} /> Contingency <b>{openContingencies.length}</b></span>
+          <span>
+            <ClipboardList size={14} /> Events <b>{eventLog.length}</b>
+          </span>
+          <span>
+            <BadgeCheck size={14} /> Open loads <b>{openFeeders.length}</b>
+          </span>
+          <span>
+            <BadgeCheck size={14} /> Contingency{" "}
+            <b>{openContingencies.length}</b>
+          </span>
         </div>
       </header>
 
@@ -41,15 +54,22 @@ export function EventLogView() {
             </div>
           </header>
           <div className="audit-list">
-            {eventLog.length > 0 ? eventLog.map((event, index) => (
-              <article key={`${event}-${index}`}>
-                <span>{String(eventLog.length - index).padStart(2, "0")}</span>
-                <p>{event}</p>
-              </article>
-            )) : (
+            {eventLog.length > 0 ? (
+              eventLog.map((event, index) => (
+                <article key={`${event}-${index}`}>
+                  <span>
+                    {String(eventLog.length - index).padStart(2, "0")}
+                  </span>
+                  <p>{event}</p>
+                </article>
+              ))
+            ) : (
               <article>
                 <span>00</span>
-                <p>No event recorded. Trigger a contingency or open a load breaker.</p>
+                <p>
+                  No event recorded. Trigger a contingency or open a load
+                  breaker.
+                </p>
               </article>
             )}
           </div>
@@ -64,9 +84,19 @@ export function EventLogView() {
             </div>
           </header>
           <div className="state-list">
-            {openContingencies.map(([id]) => <span key={id}>Contingency: <b>{id}</b></span>)}
-            {openFeeders.map((feeder) => <span key={feeder.id}>Load: <b>{feeder.name}</b> {feeder.mw} MW</span>)}
-            {openContingencies.length === 0 && openFeeders.length === 0 ? <span>All monitored objects are closed.</span> : null}
+            {openContingencies.map(([id]) => (
+              <span key={id}>
+                Contingency: <b>{id}</b>
+              </span>
+            ))}
+            {openFeeders.map((feeder) => (
+              <span key={feeder.id}>
+                Load: <b>{feeder.name}</b> {feeder.mw} MW
+              </span>
+            ))}
+            {openContingencies.length === 0 && openFeeders.length === 0 ? (
+              <span>All monitored objects are closed.</span>
+            ) : null}
           </div>
         </section>
       </div>

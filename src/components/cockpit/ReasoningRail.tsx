@@ -2,7 +2,13 @@ import { Brain } from "lucide-react";
 import { useAdsStore } from "../../lib/ads/store";
 
 export function ReasoningRail() {
-  const { decision, hoverDecision, requiredReliefMw, setRequiredReliefMw, feeders } = useAdsStore();
+  const {
+    decision,
+    hoverDecision,
+    requiredReliefMw,
+    setRequiredReliefMw,
+    feeders,
+  } = useAdsStore();
   const displayDecision = hoverDecision ?? decision;
   const hasLiveDecision = !hoverDecision && decision.status === "armed";
   const hasDecisionView = Boolean(hoverDecision || hasLiveDecision);
@@ -14,16 +20,27 @@ export function ReasoningRail() {
     : hasLiveDecision
       ? "Manual Pre-arm"
       : "Operator Guide";
-  const displayRequired = hasDecisionView ? displayDecision.requiredReliefMw : requiredReliefMw;
+  const displayRequired = hasDecisionView
+    ? displayDecision.requiredReliefMw
+    : requiredReliefMw;
   const remainingNeed = isExecuted ? 0 : displayRequired;
-  const totalLoad = feeders.filter((feeder) => feeder.breakerState === "closed").reduce((sum, feeder) => sum + feeder.mw, 0);
-  const selectedNames = displayDecision.selected?.feeders.map((feeder) => feeder.name).join(" + ") ?? "No target armed";
+  const totalLoad = feeders
+    .filter((feeder) => feeder.breakerState === "closed")
+    .reduce((sum, feeder) => sum + feeder.mw, 0);
+  const selectedNames =
+    displayDecision.selected?.feeders
+      .map((feeder) => feeder.name)
+      .join(" + ") ?? "No target armed";
   const selectedMw = displayDecision.selected?.selectedMw ?? 0;
   const overshed = displayDecision.selected?.overshedMw ?? 0;
   const operations = displayDecision.selected?.feeders.length ?? 0;
   const firstAlternative = displayDecision.alternatives[0];
-  const rejectedCount = displayDecision.alternatives.length + displayDecision.rejected.length;
-  const rejectedToShow = [...displayDecision.alternatives, ...displayDecision.rejected].slice(0, 3);
+  const rejectedCount =
+    displayDecision.alternatives.length + displayDecision.rejected.length;
+  const rejectedToShow = [
+    ...displayDecision.alternatives,
+    ...displayDecision.rejected,
+  ].slice(0, 3);
 
   return (
     <aside className="side-rail" aria-label="ADS decision reasoning">
@@ -37,9 +54,16 @@ export function ReasoningRail() {
         </div>
       </section>
 
-      <section className="logic-hero logic-animated" key={`hero-${displayMode}-${displayDecision.title ?? "guide"}`}>
-        <small>{hasDecisionView ? displayDecision.mode : "SMART LOAD SHEDDING"}</small>
-        <h2>{hasDecisionView ? displayDecision.title : "How ADS Brain Chooses"}</h2>
+      <section
+        className="logic-hero logic-animated"
+        key={`hero-${displayMode}-${displayDecision.title ?? "guide"}`}
+      >
+        <small>
+          {hasDecisionView ? displayDecision.mode : "SMART LOAD SHEDDING"}
+        </small>
+        <h2>
+          {hasDecisionView ? displayDecision.title : "How ADS Brain Chooses"}
+        </h2>
         <p className="rail-copy">
           {hasDecisionView
             ? displayDecision.explanation
@@ -48,30 +72,69 @@ export function ReasoningRail() {
       </section>
 
       {hasDecisionView ? (
-        <section className="logic-scoreboard logic-animated" aria-label="Shedding summary" key={`score-${displayDecision.constraint}-${displayDecision.status}`}>
-        <div>
-          <small>{isExecuted ? "Remain" : "Need"}</small>
-          <b>{remainingNeed}<span>MW</span></b>
-        </div>
-        <div>
-          <small>{isExecuted ? "Tripped" : "Shed"}</small>
-          <b>{selectedMw}<span>MW</span></b>
-        </div>
-        <div>
-          <small>{isExecuted ? "Cleared" : "Over"}</small>
-          <b>{isExecuted ? displayRequired : overshed}<span>MW</span></b>
-        </div>
-        <div>
-          <small>CB</small>
-          <b>{operations}</b>
-        </div>
+        <section
+          className="logic-scoreboard logic-animated"
+          aria-label="Shedding summary"
+          key={`score-${displayDecision.constraint}-${displayDecision.status}`}
+        >
+          <div>
+            <small>{isExecuted ? "Remain" : "Need"}</small>
+            <b>
+              {remainingNeed}
+              <span>MW</span>
+            </b>
+          </div>
+          <div>
+            <small>{isExecuted ? "Tripped" : "Shed"}</small>
+            <b>
+              {selectedMw}
+              <span>MW</span>
+            </b>
+          </div>
+          <div>
+            <small>{isExecuted ? "Cleared" : "Over"}</small>
+            <b>
+              {isExecuted ? displayRequired : overshed}
+              <span>MW</span>
+            </b>
+          </div>
+          <div>
+            <small>CB</small>
+            <b>{operations}</b>
+          </div>
         </section>
       ) : (
-        <section className="logic-guide-grid logic-animated" aria-label="ADS logic guide">
-          <div><small>1 Detect</small><p>Temukan constraint: overload, islanding, defisit generator, atau transfer IBT/line.</p></div>
-          <div><small>2 Localize</small><p>Prioritaskan load di bus/area yang benar-benar menurunkan arus constraint.</p></div>
-          <div><small>3 Optimize</small><p>Ranking kombinasi berdasarkan lost MW, overshed, prioritas, dan jumlah operasi CB.</p></div>
-          <div><small>4 Explain</small><p>Tampilkan target dan alasan kenapa alternatif lain tidak dipilih.</p></div>
+        <section
+          className="logic-guide-grid logic-animated"
+          aria-label="ADS logic guide"
+        >
+          <div>
+            <small>1 Detect</small>
+            <p>
+              Temukan constraint: overload, islanding, defisit generator, atau
+              transfer IBT/line.
+            </p>
+          </div>
+          <div>
+            <small>2 Localize</small>
+            <p>
+              Prioritaskan load di bus/area yang benar-benar menurunkan arus
+              constraint.
+            </p>
+          </div>
+          <div>
+            <small>3 Optimize</small>
+            <p>
+              Ranking kombinasi berdasarkan lost MW, overshed, prioritas, dan
+              jumlah operasi CB.
+            </p>
+          </div>
+          <div>
+            <small>4 Explain</small>
+            <p>
+              Tampilkan target dan alasan kenapa alternatif lain tidak dipilih.
+            </p>
+          </div>
         </section>
       )}
 
@@ -91,8 +154,14 @@ export function ReasoningRail() {
 
       {hasDecisionView ? (
         <>
-          <section className="logic-target logic-animated" data-active={displayDecision.selected ? "true" : "false"} key={`target-${selectedNames}`}>
-            <small>{isExecuted ? "Armed and Tripped" : "Selected Target"}</small>
+          <section
+            className="logic-target logic-animated"
+            data-active={displayDecision.selected ? "true" : "false"}
+            key={`target-${selectedNames}`}
+          >
+            <small>
+              {isExecuted ? "Armed and Tripped" : "Selected Target"}
+            </small>
             <h3>{selectedNames}</h3>
             <p>
               {displayDecision.selected
@@ -103,7 +172,10 @@ export function ReasoningRail() {
             </p>
           </section>
 
-          <section className="logic-why logic-animated" key={`why-${displayDecision.constraint}-${selectedNames}`}>
+          <section
+            className="logic-why logic-animated"
+            key={`why-${displayDecision.constraint}-${selectedNames}`}
+          >
             <div>
               <small>Why Accepted</small>
               <p>
@@ -124,8 +196,15 @@ export function ReasoningRail() {
               <ul className="logic-reject-list">
                 {rejectedToShow.slice(1).map((candidate) => (
                   <li key={candidate.id}>
-                    <b>{candidate.feeders.map((feeder) => feeder.name).join(" + ")}</b>
-                    <span>{candidate.rejection ?? `Overshed ${candidate.overshedMw} MW atau score lebih buruk.`}</span>
+                    <b>
+                      {candidate.feeders
+                        .map((feeder) => feeder.name)
+                        .join(" + ")}
+                    </b>
+                    <span>
+                      {candidate.rejection ??
+                        `Overshed ${candidate.overshedMw} MW atau score lebih buruk.`}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -136,14 +215,27 @@ export function ReasoningRail() {
         <section className="logic-target logic-animated" data-active="true">
           <small>What to Try</small>
           <h3>Hover contingency CB</h3>
-          <p>Contoh: arahkan mouse ke IBT A, IBT C, CB line, coupler, atau generator. Load biasa hanya bisa diklik Open/Close dan tidak akan memicu arming.</p>
+          <p>
+            Contoh: arahkan mouse ke IBT A, IBT C, CB line, coupler, atau
+            generator. Load biasa hanya bisa diklik Open/Close dan tidak akan
+            memicu arming.
+          </p>
         </section>
       )}
 
       <section className="logic-footer">
-        <span>Freq <b>50.00 Hz</b></span>
-        <span>Load <b>{totalLoad} MW</b></span>
-        <span>Constraint <b>{hasDecisionView ? displayDecision.constraint : "Waiting hover"}</b></span>
+        <span>
+          Freq <b>50.00 Hz</b>
+        </span>
+        <span>
+          Load <b>{totalLoad} MW</b>
+        </span>
+        <span>
+          Constraint{" "}
+          <b>
+            {hasDecisionView ? displayDecision.constraint : "Waiting hover"}
+          </b>
+        </span>
       </section>
     </aside>
   );
