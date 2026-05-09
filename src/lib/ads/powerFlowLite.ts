@@ -147,9 +147,9 @@ function buildBusInjections(snapshot: SystemSnapshot): Record<DcBusId, number> {
   const injections = Object.fromEntries(dcBuses.map((bus) => [bus, 0])) as Record<DcBusId, number>;
   const sources = getSourceUnits().filter((source) => isClosed(snapshot.objectStates[source.id] ?? source.state));
   const rawSourceMw = sources.reduce((sum, source) => sum + source.mw, 0);
-  const dispatchScale = rawSourceMw > 0 && snapshot.sourceMw > 0
-    ? Math.min(1, snapshot.sourceMw / rawSourceMw)
-    : 1;
+  const dispatchScale = rawSourceMw > 0
+    ? Math.min(1, Math.max(0, snapshot.sourceMw) / rawSourceMw)
+    : 0;
 
   for (const source of sources) {
     injections[sourceBus(source.id, source.bus)] += source.mw * dispatchScale;

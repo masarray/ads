@@ -55,6 +55,41 @@ const equipmentIds = [
   "GEN_C2"
 ];
 
+const sourceCapacityMw: Record<string, number> = {
+  IBT_A: 72,
+  IBT_C: 124,
+  GEN_A1: 180,
+  GEN_A2: 135,
+  GEN_C1: 165,
+  GEN_C2: 145,
+};
+
+function closedLoadMw(feeders: Feeder[]): number {
+  return feeders
+    .filter((feeder) => feeder.breakerState !== "open" && feeder.breakerState !== "failed")
+    .reduce((sum, feeder) => sum + feeder.mw, 0);
+}
+
+function closedSourceCapacityMw(objectStates: Record<string, BreakerState>): number {
+  return Object.entries(sourceCapacityMw)
+    .filter(([id]) => objectStates[id] !== "open" && objectStates[id] !== "failed")
+    .reduce((sum, [, mw]) => sum + mw, 0);
+}
+
+/**
+ * Blackstart dispatch note:
+ * Closing a generator breaker during restoration does not mean the unit instantly
+ * injects its nameplate MW. In real blackstart, online units follow staged load
+ * pickup. This helper gives PowerFlowLite a temporary dispatch target so it
+ * solves using restored load + small headroom instead of full installed source.
+ */
+function blackstartDispatchTargetMw(feeders: Feeder[], objectStates: Record<string, BreakerState>): number {
+  const loadMw = closedLoadMw(feeders);
+  const sourceCapacity = closedSourceCapacityMw(objectStates);
+  if (sourceCapacity <= 0 || loadMw <= 0) return 0;
+  return Math.min(sourceCapacity, Math.ceil(loadMw * 1.02));
+}
+
 
 const sequenceDelayMs = 800;
 
@@ -668,35 +703,127 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     if (get().scenarioRun?.active) return;
 
     const title = "Blackstart Learning Sequence";
-    const blackstartSteps: Array<{ label: string; objectId?: string; message: string }> = [
-      { label: "Total blackout", message: "All controllable breakers opened. Buses should be de-energized before restoration." },
-      { label: "Start GEN A1", objectId: "GEN_A1", message: "Close the first blackstart-capable generator to energize Bus A." },
-      { label: "Pick up LOAD A5", objectId: "LOAD_A5", message: "Restore a small essential load first, not the full area load." },
-      { label: "Pick up LOAD A4", objectId: "LOAD_A4", message: "Add the next priority load and let PowerFlowLite validate the step." },
-      { label: "Synchronize GEN A2", objectId: "GEN_A2", message: "Bring a second local source online before expanding the island." },
-      { label: "Energize Line A-B", objectId: "LINE_AB", message: "Extend the energized path from Bus A toward Substation B." },
-      { label: "Close Bus B coupler", objectId: "LINE_COUPLER", message: "Tie Bus B sections after Bus B has a source path." },
-      { label: "Pick up LOAD B5", objectId: "LOAD_B5", message: "Restore B-area priority load gradually." },
-      { label: "Pick up LOAD B4", objectId: "LOAD_B4", message: "Continue staged load pickup and monitor branch loading." },
-      { label: "Start GEN C1", objectId: "GEN_C1", message: "Energize Substation C from a local generator before tying wider areas." },
-      { label: "Pick up LOAD C5", objectId: "LOAD_C5", message: "Restore a small C-area load while keeping source-load balance inside limits." },
-      { label: "Close Line A-C", objectId: "LINE_AC", message: "Tie Area C to the restored system after local source is available." },
-      { label: "Synchronize GEN C2", objectId: "GEN_C2", message: "Add generation margin for C-area restoration." },
-      { label: "Pick up LOAD C4", objectId: "LOAD_C4", message: "Restore additional C load." },
-      { label: "Restore IBT A", objectId: "IBT_A", message: "Return grid support on IBT A after the island is stable." },
-      { label: "Restore IBT C", objectId: "IBT_C", message: "Return grid support on IBT C and finish the learning sequence." },
+
+    /**
+     * Source-first restoration philosophy:
+     * - All blackout opens every load, source, line, coupler, and IBT first.
+     * - Local generator sources are closed first, but dispatch stays load-following.
+     * - The empty network/tie path is energized before any B-area pickup.
+     * - Loads are restored one feeder at a time after the source/tie path is ready.
+     * - IBTs/grid support are synchronized near the end only after the island is stable.
+     *
+     * Important: each step is applied through a restoration-close operation, not
+     * through contingency execution. This keeps blackstart from accidentally using
+     * TripMatrix remedial action as if the user had created a fault.
+     */
+    const blackstartSteps: Array<{ label: string; objectId?: string; message: string; optional?: boolean }> = [
+      { label: "Total blackout", message: "All controllable breakers opened. Loads stay disconnected so bus energization does not pick up hidden load blocks." },
+
+      { label: "Start GEN A1", objectId: "GEN_A1", message: "Close the first blackstart-capable local source. The unit is online/available; dispatch remains load-following." },
+      { label: "Synchronize GEN A2", objectId: "GEN_A2", message: "Close the second A-area source before restoring A and B load blocks." },
+      { label: "Start GEN C1", objectId: "GEN_C1", message: "Close the first C-area source while all C loads remain open." },
+      { label: "Synchronize GEN C2", objectId: "GEN_C2", message: "Close the second C-area source. Sources are ready before load pickup." },
+
+      { label: "Energize Line A-B", objectId: "LINE_AB", message: "Energize the A-B path with B loads still open. Bus energization is not load pickup." },
+      { label: "Close Bus B coupler", objectId: "LINE_COUPLER", message: "Tie B bus sections while all B feeders remain open." },
+      { label: "Energize Line B-C", objectId: "LINE_BC", message: "Create a parallel A/B/C restoration path before B load pickup." },
+      { label: "Energize Line A-C", objectId: "LINE_AC", message: "Complete the source-backed ring before adding larger load blocks." },
+
+      { label: "Pick up LOAD A5", objectId: "LOAD_A5", message: "Restore small A essential load." },
+      { label: "Pick up LOAD B5", objectId: "LOAD_B5", message: "Restore small B load after the B bus is energized." },
+      { label: "Pick up LOAD C5", objectId: "LOAD_C5", message: "Restore small C load after local C sources are online." },
+      { label: "Pick up LOAD B4", objectId: "LOAD_B4", message: "Continue staged B restoration." },
+      { label: "Pick up LOAD A4", objectId: "LOAD_A4", message: "Continue staged A restoration." },
+      { label: "Pick up LOAD C4", objectId: "LOAD_C4", message: "Continue staged C restoration." },
+      { label: "Pick up LOAD B3", objectId: "LOAD_B3", message: "Restore medium B load after the parallel network is established." },
+      { label: "Pick up LOAD C3", objectId: "LOAD_C3", message: "Restore medium C load." },
+      { label: "Pick up LOAD A2", objectId: "LOAD_A2", message: "Restore medium A load." },
+      { label: "Pick up LOAD C2", objectId: "LOAD_C2", message: "Restore additional C load." },
+      { label: "Pick up LOAD A1", objectId: "LOAD_A1", message: "Restore additional A load." },
+      { label: "Pick up LOAD B2", objectId: "LOAD_B2", message: "Restore B2 load after both B sections are tied." },
+      { label: "Pick up LOAD B1", objectId: "LOAD_B1", message: "Restore the largest B block only after the ring is already carrying flow." },
+      { label: "Pick up LOAD A3", objectId: "LOAD_A3", message: "Restore the remaining A load." },
+      { label: "Pick up LOAD C1", objectId: "LOAD_C1", message: "Restore the remaining C load." },
+
+      { label: "Synchronize IBT A", objectId: "IBT_A", optional: true, message: "Return Grid/IBT A support only after the local restoration island is stable." },
+      { label: "Synchronize IBT C", objectId: "IBT_C", optional: true, message: "Return Grid/IBT C support and validate final flow." },
     ];
+
+    const makeClosedState = (
+      feeders: Feeder[],
+      objectStates: Record<string, BreakerState>,
+      objectId: string,
+    ): { feeders: Feeder[]; objectStates: Record<string, BreakerState> } => {
+      const isLoad = feeders.some((feeder) => feeder.id === objectId);
+      const nextStates = { ...objectStates, [objectId]: "closed" as BreakerState };
+      const nextFeeders = isLoad
+        ? feeders.map((feeder) =>
+            feeder.id === objectId ? { ...feeder, breakerState: "closed" as BreakerState } : feeder,
+          )
+        : feeders;
+      return {
+        feeders: nextFeeders,
+        objectStates: {
+          ...nextStates,
+          ...Object.fromEntries(nextFeeders.map((feeder) => [feeder.id, feeder.breakerState])),
+        },
+      };
+    };
+
+    const buildBlackstartMatrix = (
+      feeders: Feeder[],
+      objectStates: Record<string, BreakerState>,
+    ): { matrix: TripMatrix; dispatchMw: number; restoredLoadMw: number; onlineSourceMw: number } => {
+      const dispatchMw = blackstartDispatchTargetMw(feeders, objectStates);
+      const restoredLoadMw = closedLoadMw(feeders);
+      const onlineSourceMw = closedSourceCapacityMw(objectStates);
+      return {
+        dispatchMw,
+        restoredLoadMw,
+        onlineSourceMw,
+        matrix: buildMatrix(
+          feeders,
+          objectStates,
+          get().contingencyRules,
+          dispatchMw,
+          0,
+          get().frequencyHz,
+        ),
+      };
+    };
+
+    const validateCandidate = (
+      label: string,
+      feeders: Feeder[],
+      objectStates: Record<string, BreakerState>,
+    ): { safe: boolean; message: string; matrix: TripMatrix; dispatchMw: number; restoredLoadMw: number; onlineSourceMw: number } => {
+      const result = buildBlackstartMatrix(feeders, objectStates);
+      const worst = result.matrix.powerFlow.overloadedBranches[0];
+      if (worst) {
+        return {
+          ...result,
+          safe: false,
+          message: `${label} forecast blocked: ${worst.branchId} would load ${worst.loadingPct.toFixed(1)}% (${worst.absFlowMw} MW).`,
+        };
+      }
+      return {
+        ...result,
+        safe: true,
+        message: `${label} forecast safe. Restored load ${result.restoredLoadMw} MW, dispatch target ${result.dispatchMw} MW, online capacity ${result.onlineSourceMw} MW.`,
+      };
+    };
 
     const openFeeders = get().feeders.map((feeder) => ({ ...feeder, breakerState: "open" as BreakerState }));
     const openStates = buildObjectStates(openFeeders);
     for (const id of equipmentIds) openStates[id] = "open";
     for (const feeder of openFeeders) openStates[feeder.id] = "open";
+
     const blackoutMatrix = buildMatrix(
       openFeeders,
       openStates,
       get().contingencyRules,
-      get().sourceMw,
-      get().minReserveMw,
+      0,
+      0,
       get().frequencyHz,
     );
 
@@ -705,6 +832,9 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       objectStates: openStates,
       ...matrixState(blackoutMatrix),
       decision: blackoutMatrix.baseDecision,
+      sourceMw: 0,
+      minReserveMw: 0,
+      requiredReliefMw: 0,
       hoverDecision: null,
       hoverObjectId: null,
       activeContingencyId: null,
@@ -716,7 +846,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
         message: blackstartSteps[0].message,
       },
       eventLog: [
-        "Blackstart: total blackout applied. All controllable breakers opened.",
+        "Blackstart: all load feeders, generators, lines, couplers, and IBTs opened. Hidden load pickup is prevented.",
         ...get().eventLog,
       ].slice(0, 120),
     });
@@ -725,6 +855,8 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
 
     for (let index = 1; index < blackstartSteps.length; index += 1) {
       const step = blackstartSteps[index];
+      const current = get();
+
       set({
         scenarioRun: {
           active: true,
@@ -733,26 +865,104 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
           total: blackstartSteps.length - 1,
           message: `${step.label}: ${step.message}`,
         },
-        eventLog: [`Blackstart step ${index}: ${step.label}.`, ...get().eventLog].slice(0, 120),
+        eventLog: [`Blackstart step ${index}: ${step.label}.`, ...current.eventLog].slice(0, 120),
       });
 
+      let feeders = current.feeders;
+      let objectStates = current.objectStates;
+      let matrix = current.tripMatrix;
+      let dispatchMw = current.sourceMw;
+      let restoredLoadMw = closedLoadMw(feeders);
+      let onlineSourceMw = closedSourceCapacityMw(objectStates);
+
       if (step.objectId) {
-        const state = get().objectStates[step.objectId];
-        if (state === "open" || state === "failed") get().toggleObject(step.objectId);
+        if (objectStates[step.objectId] !== "closed") {
+          const candidate = makeClosedState(feeders, objectStates, step.objectId);
+          const forecast = validateCandidate(step.label, candidate.feeders, candidate.objectStates);
+
+          if (!forecast.safe) {
+            set({
+              scenarioRun: {
+                active: false,
+                title: "Blackstart paused",
+                step: index,
+                total: blackstartSteps.length - 1,
+                message: `${forecast.message} Restoration should not continue until this step is changed.`,
+              },
+              ...matrixState(forecast.matrix),
+              decision: forecast.matrix.baseDecision,
+              sourceMw: forecast.dispatchMw,
+              minReserveMw: 0,
+              hoverDecision: null,
+              hoverObjectId: null,
+              eventLog: [
+                `Blackstart paused before applying ${step.label}: ${forecast.message}`,
+                ...get().eventLog,
+              ].slice(0, 120),
+            });
+            return;
+          }
+
+          feeders = candidate.feeders;
+          objectStates = candidate.objectStates;
+          matrix = forecast.matrix;
+          dispatchMw = forecast.dispatchMw;
+          restoredLoadMw = forecast.restoredLoadMw;
+          onlineSourceMw = forecast.onlineSourceMw;
+        } else {
+          const state = buildBlackstartMatrix(feeders, objectStates);
+          matrix = state.matrix;
+          dispatchMw = state.dispatchMw;
+          restoredLoadMw = state.restoredLoadMw;
+          onlineSourceMw = state.onlineSourceMw;
+        }
       }
+
+      set({
+        feeders,
+        objectStates,
+        ...matrixState(matrix),
+        decision: matrix.baseDecision,
+        sourceMw: dispatchMw,
+        minReserveMw: 0,
+        hoverDecision: null,
+        hoverObjectId: null,
+        activeContingencyId: null,
+        eventLog: [
+          `Blackstart applied: ${step.label}. Restored load ${restoredLoadMw} MW, dispatch ${dispatchMw} MW, online source capacity ${onlineSourceMw} MW.`,
+          ...get().eventLog,
+        ].slice(0, 120),
+      });
 
       await wait();
     }
 
+    const final = get();
+    const finalMatrixState = buildBlackstartMatrix(final.feeders, final.objectStates);
+    const finalWorst = finalMatrixState.matrix.powerFlow.overloadedBranches[0];
+    const finalLoad = closedLoadMw(final.feeders);
+    const restoredFeeders = final.feeders.filter((feeder) => feeder.breakerState === "closed").length;
+
     set({
+      ...matrixState(finalMatrixState.matrix),
+      decision: finalMatrixState.matrix.baseDecision,
+      sourceMw: finalMatrixState.dispatchMw,
+      minReserveMw: 0,
       scenarioRun: {
         active: false,
-        title,
+        title: finalWorst ? "Blackstart completed with warning" : "Blackstart complete",
         step: blackstartSteps.length - 1,
         total: blackstartSteps.length - 1,
-        message: "Blackstart sequence complete. Review SLD energization, Power Flow cards, Trip Matrix, and Event Log.",
+        message: finalWorst
+          ? `${finalWorst.branchId} still loads ${finalWorst.loadingPct.toFixed(1)}%. Review restoration path before declaring normal service.`
+          : `Source-first blackstart complete. ${restoredFeeders} feeders restored, total load ${finalLoad} MW, no branch above 110%.`,
       },
-      eventLog: ["Blackstart sequence complete.", ...get().eventLog].slice(0, 120),
+      eventLog: [
+        finalWorst
+          ? `Blackstart completed with warning: ${finalWorst.branchId} loading ${finalWorst.loadingPct.toFixed(1)}%.`
+          : `Blackstart complete: restored ${restoredFeeders} feeders, load ${finalLoad} MW, no active overload.`,
+        ...get().eventLog,
+      ].slice(0, 120),
     });
   },
   injectScenario: (kind, value) => {

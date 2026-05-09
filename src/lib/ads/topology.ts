@@ -152,8 +152,17 @@ function buildIsland(
   const generators = onlineSources.filter((source) => (source.kind ?? "generator") === "generator");
   const gridSources = onlineSources.filter((source) => source.kind === "grid");
 
-  const generationMw = generators.reduce((sum, generator) => sum + generator.mw, 0);
-  const gridImportMw = gridSources.reduce((sum, source) => sum + source.mw, 0);
+  const rawOnlineSourceMw = onlineSources.reduce((sum, source) => sum + source.mw, 0);
+  const useDispatchAwareSource = snapshot.minReserveMw === 0 || snapshot.sourceMw === 0;
+  const dispatchScale = useDispatchAwareSource && rawOnlineSourceMw > 0
+    ? Math.min(1, Math.max(0, snapshot.sourceMw) / rawOnlineSourceMw)
+    : 1;
+
+  // Use dispatched MW for source/load balance during restoration/blackstart.
+  // In normal ADS study mode, keep the previous installed-capacity semantics so
+  // OGS/LS contingency behavior remains stable. Blackstart sets minReserveMw=0.
+  const generationMw = generators.reduce((sum, generator) => sum + generator.mw * dispatchScale, 0);
+  const gridImportMw = gridSources.reduce((sum, source) => sum + source.mw * dispatchScale, 0);
   const sourceMw = generationMw + gridImportMw;
   const loadMw = loads.reduce((sum, feeder) => sum + feeder.mw, 0);
   const reserveMw = sourceMw - loadMw;
