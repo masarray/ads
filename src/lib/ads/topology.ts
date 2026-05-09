@@ -25,11 +25,22 @@ const topologyEdges: TopologyEdge[] = [
   { id: "LINE_AC", from: "A", to: "C" },
 ];
 
+/**
+ * Source modelling note:
+ * - GEN_* are dispatchable local generation and may be selected for OGS.
+ * - IBT_* are grid/import sources. They support island/area balance while closed,
+ *   but they are NOT generator-shedding targets.
+ *
+ * This avoids the previous bug where an area backed by IBT was treated as a pure
+ * generator island and the ADS tried to trip KIT units unnecessarily.
+ */
 const sourceUnits: SourceUnit[] = [
-  { id: "GEN_A1", name: "KIT A1", bus: "A", mw: 180, state: "closed" },
-  { id: "GEN_A2", name: "KIT A2", bus: "A", mw: 135, state: "closed" },
-  { id: "GEN_C1", name: "KIT C1", bus: "C", mw: 165, state: "closed" },
-  { id: "GEN_C2", name: "KIT C2", bus: "C", mw: 145, state: "closed" },
+  { id: "IBT_A", name: "IBT A / Grid A", bus: "A", mw: 72, state: "closed", kind: "grid" },
+  { id: "IBT_C", name: "IBT C / Grid C", bus: "C", mw: 124, state: "closed", kind: "grid" },
+  { id: "GEN_A1", name: "KIT A1", bus: "A", mw: 180, state: "closed", kind: "generator" },
+  { id: "GEN_A2", name: "KIT A2", bus: "A", mw: 135, state: "closed", kind: "generator" },
+  { id: "GEN_C1", name: "KIT C1", bus: "C", mw: 165, state: "closed", kind: "generator" },
+  { id: "GEN_C2", name: "KIT C2", bus: "C", mw: 145, state: "closed", kind: "generator" },
 ];
 
 export function buildTopology(snapshot: SystemSnapshot): TopologyModel {
@@ -76,8 +87,10 @@ export function calculateIslands(snapshot: SystemSnapshot): TopologyModel {
   for (const source of sourceUnits) {
     const islandId = nodeIslandMap.get(busTopologyNode(source.bus));
     if (!islandId) continue;
-    generatorIslandMap[source.id] = islandId;
     deviceIslandMap[source.id] = islandId;
+    if ((source.kind ?? "generator") === "generator") {
+      generatorIslandMap[source.id] = islandId;
+    }
   }
 
   return {
@@ -129,28 +142,44 @@ function buildIsland(
   const loads = snapshot.feeders.filter(
     (feeder) => isClosed(feeder.breakerState) && nodeSet.has(feederTopologyNode(feeder)),
   );
-  const generators = sourceUnits.filter(
+
+  const onlineSources = sourceUnits.filter(
     (source) =>
       isClosed(snapshot.objectStates[source.id] ?? source.state) &&
       nodeSet.has(busTopologyNode(source.bus)),
   );
-  const sourceMw = generators.reduce((sum, generator) => sum + generator.mw, 0);
+
+  const generators = onlineSources.filter((source) => (source.kind ?? "generator") === "generator");
+  const gridSources = onlineSources.filter((source) => source.kind === "grid");
+
+  const generationMw = generators.reduce((sum, generator) => sum + generator.mw, 0);
+  const gridImportMw = gridSources.reduce((sum, source) => sum + source.mw, 0);
+  const sourceMw = generationMw + gridImportMw;
   const loadMw = loads.reduce((sum, feeder) => sum + feeder.mw, 0);
   const reserveMw = sourceMw - loadMw;
+
+  const localEdgeIds = topologyEdges
+    .filter((edge) => nodeSet.has(edge.from) || nodeSet.has(edge.to))
+    .map((edge) => edge.id);
 
   return {
     id,
     buses: [...new Set(nodeIds.map(displayBus))],
     nodeIds,
     sourceMw,
+    generationMw,
+    gridImportMw,
     loadMw,
     reserveMw,
     deficitMw: Math.max(0, loadMw - sourceMw),
+    hasGridSource: gridSources.length > 0,
     loadIds: loads.map((feeder) => feeder.id),
     generatorIds: generators.map((generator) => generator.id),
-    deviceIds: topologyEdges
-      .filter((edge) => nodeSet.has(edge.from) || nodeSet.has(edge.to))
-      .map((edge) => edge.id),
+    gridSourceIds: gridSources.map((source) => source.id),
+    deviceIds: [
+      ...localEdgeIds,
+      ...onlineSources.map((source) => source.id),
+    ],
   };
 }
 

@@ -57,7 +57,15 @@ export function simulateContingency(
   const currentIslandId = currentTopology.deviceIslandMap[triggerId];
   const affectedIsland = findAffectedIsland(rule, nextTopology, currentIslandId);
   const formsNewIsland = nextTopology.islands.length > currentTopology.islands.length;
-  const balanceDecision = formsNewIsland && affectedIsland
+  const isTrueIsland = Boolean(affectedIsland && !affectedIsland.hasGridSource);
+  const isSourceLossTrigger = isSourceLoss(triggerId);
+  const mustEvaluateIslandBalance = Boolean(
+    affectedIsland &&
+      !affectedIsland.hasGridSource &&
+      (formsNewIsland || isSourceLossTrigger),
+  );
+
+  const balanceDecision = mustEvaluateIslandBalance && affectedIsland
     ? evaluateIslandBalance(affectedIsland, rule, nextSnapshot, matrixVersion)
     : null;
 
@@ -75,6 +83,16 @@ export function simulateContingency(
       "Cannot resolve a valid electrical island for this contingency.",
       rule,
     );
+  }
+
+  if (isSourceLossTrigger) {
+    const sourceLossDecision = evaluateSourceLossTrigger(triggerId, affectedIsland, rule, nextSnapshot);
+    return buildRow(triggerId, nextSnapshot, matrixVersion, affectedIsland, sourceLossDecision);
+  }
+
+  if (formsNewIsland && affectedIsland.hasGridSource && affectedIsland.reserveMw >= 0) {
+    const supportedDecision = buildGridSupportedNoActionDecision(triggerId, affectedIsland, rule);
+    return buildRow(triggerId, nextSnapshot, matrixVersion, affectedIsland, supportedDecision);
   }
 
   const localFeeders = localEligibleFeeders(nextSnapshot.feeders, affectedIsland);
@@ -125,16 +143,207 @@ export function simulateContingency(
   return buildRow(triggerId, snapshot, matrixVersion, affectedIsland, decision);
 }
 
+
+function isSourceLoss(triggerId: string): boolean {
+  return triggerId.startsWith("GEN_") || triggerId.startsWith("IBT_");
+}
+
+function evaluateSourceLossTrigger(
+  triggerId: string,
+  island: ElectricalIsland,
+  rule: ContingencyRule,
+  snapshot: SystemSnapshot,
+): AdsDecision {
+  // Source-loss rows must be driven by the post-contingency power balance,
+  // not by the old static requiredReliefMw table.
+  // Example: GEN_C1 trips while IBT_C is still closed. The local source may
+  // still be higher than the local load, so load shedding must be NO ACTION.
+  if (island.loadMw <= 0) {
+    return {
+      status: "normal",
+      requiredReliefMw: 0,
+      actionType: "NORMAL",
+      scenarioKind: rule.scenarioKind,
+      title: `${rule.title} - No Local Load`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: "No closed local load",
+      explanation:
+        "Source contingency was evaluated using post-event island balance. No load shedding is possible or required because local load is zero.",
+      detectedCondition: `Area ${island.id}: source ${island.sourceMw} MW, load 0 MW.`,
+      operatorMessage:
+        "Tidak ada beban lokal closed pada area terdampak; matrix tidak melakukan load shedding.",
+      imbalanceBasis: `Area ${island.id}: source ${island.sourceMw} MW, load 0 MW.`,
+      imbalanceFormula: "Required load shed = 0 MW",
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  // Use the 95% lower balance window from the ADS island-balance rule.
+  // Required load shed is the amount needed so Psource / Pload_final >= 95%.
+  const minimumAllowedSourceMw = island.loadMw * 0.95;
+
+  if (island.sourceMw >= minimumAllowedSourceMw) {
+    return {
+      status: "normal",
+      requiredReliefMw: 0,
+      actionType: "NORMAL",
+      scenarioKind: rule.scenarioKind,
+      title: `${rule.title} - Supported`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: rule.constraint,
+      explanation:
+        "Source-loss contingency was evaluated from the post-event power balance. Remaining local generation plus IBT/grid import is still enough, so no load shedding is armed.",
+      detectedCondition:
+        `Area ${island.id}: source ${island.sourceMw} MW, load ${island.loadMw} MW, ` +
+        `grid/import ${island.gridImportMw} MW, reserve ${island.reserveMw} MW.`,
+      operatorMessage:
+        "IBT/grid/source margin masih cukup pada area terdampak. Trip Matrix tidak memakai requiredRelief statis untuk membuang load.",
+      imbalanceBasis:
+        `Area ${island.id}: Psource ${island.sourceMw} MW = local gen ${island.generationMw} MW + ` +
+        `IBT/grid ${island.gridImportMw} MW, Pload ${island.loadMw} MW.`,
+      imbalanceFormula:
+        `No action: ${island.sourceMw} MW >= 95% x ${island.loadMw} MW (${minimumAllowedSourceMw.toFixed(1)} MW).`,
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  const requiredLoadShedMw = Math.max(0, Math.ceil(island.loadMw - island.sourceMw / 0.95));
+  const localFeeders = localEligibleFeeders(snapshot.feeders, island);
+
+  if (requiredLoadShedMw <= 0) {
+    return {
+      status: "normal",
+      requiredReliefMw: 0,
+      actionType: "NORMAL",
+      scenarioKind: rule.scenarioKind,
+      title: `${rule.title} - Balanced`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: rule.constraint,
+      explanation: "Post-contingency area balance remains inside allowed limits.",
+      detectedCondition: `Area ${island.id}: source ${island.sourceMw} MW, load ${island.loadMw} MW.`,
+      operatorMessage: "Tidak ada load shedding yang diperlukan.",
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  return rankShedding(localFeeders, requiredLoadShedMw, {
+    ...enrichRuleContext(triggerId, rule),
+    mode: "TRIP MATRIX",
+    actionType: "DEFICIT_LOAD_SHEDDING",
+    scenarioKind: "generation_derate",
+    strictAffectedBuses: true,
+    affectedBuses: island.buses,
+    detectedCondition:
+      `Source loss at ${triggerId}: post-event source ${island.sourceMw} MW below ` +
+      `95% balance requirement for local load ${island.loadMw} MW.`,
+    operatorMessage:
+      "Trip Matrix menghitung kebutuhan load shedding dari balance lokal setelah source trip, bukan dari requiredRelief statis.",
+    imbalanceBasis:
+      `Area ${island.id}: Psource ${island.sourceMw} MW = local gen ${island.generationMw} MW + ` +
+      `IBT/grid ${island.gridImportMw} MW, Pload ${island.loadMw} MW.`,
+    imbalanceFormula:
+      `Required load shed = ceil(${island.loadMw} - ${island.sourceMw} / 0.95) = ${requiredLoadShedMw} MW`,
+    steps: [
+      "Build pre-event system snapshot.",
+      "Apply source-loss contingency virtually.",
+      "Recalculate affected electrical island/area.",
+      "Read remaining local generation plus IBT/grid import.",
+      "Arm load shedding only if local source is below balance threshold.",
+    ],
+    passCriteria: [
+      "IBT/grid source is counted as local support while closed.",
+      "Static requiredReliefMw is not used when post-event source margin is enough.",
+      "Targets are local to the affected island only.",
+    ],
+  });
+}
+
+function buildGridSupportedNoActionDecision(
+  triggerId: string,
+  island: ElectricalIsland,
+  rule: ContingencyRule,
+): AdsDecision {
+  return {
+    status: "normal",
+    requiredReliefMw: 0,
+    actionType: "NORMAL",
+    scenarioKind: rule.scenarioKind,
+    title: `${rule.title} - Grid Supported`,
+    mode: "TRIP MATRIX",
+    affectedBuses: island.buses,
+    constraint: rule.constraint,
+    explanation:
+      "Topology split was evaluated from the post-event area balance. The affected area still has closed IBT/grid support and non-negative reserve, so ADS does not arm remedial trip targets.",
+    detectedCondition:
+      `Area ${island.id}: source ${island.sourceMw} MW, load ${island.loadMw} MW, ` +
+      `grid/import ${island.gridImportMw} MW, reserve ${island.reserveMw} MW.`,
+    operatorMessage:
+      "Area masih memiliki IBT/grid support dan margin cukup. Matrix tidak menjalankan OGS/OLS hanya dari rule statis.",
+    imbalanceBasis:
+      `Area ${island.id}: Psource ${island.sourceMw} MW, Pload ${island.loadMw} MW, reserve ${island.reserveMw} MW.`,
+    imbalanceFormula:
+      `No action: reserve after ${triggerId} = ${island.reserveMw} MW.`,
+    alternatives: [],
+    rejected: [],
+  };
+}
+
 export function evaluateIslandBalance(
   island: ElectricalIsland,
   rule: ContingencyRule,
   snapshot: SystemSnapshot,
   _matrixVersion = matrixSequence,
 ): AdsDecision {
-  if (island.loadMw <= 0 && island.sourceMw > 0) {
+  if (island.hasGridSource) {
+    return {
+      status: "normal",
+      requiredReliefMw: 0,
+      actionType: "NORMAL",
+      title: `${island.id} Grid-Supported`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: "Area has closed IBT/grid source",
+      explanation:
+        "Area ini masih disuplai IBT/grid source, sehingga tidak diperlakukan sebagai island murni untuk OGS/UFLS balance.",
+      detectedCondition: `Area ${island.id}: Pgen ${island.generationMw} MW, grid/import ${island.gridImportMw} MW, Pload ${island.loadMw} MW.`,
+      operatorMessage:
+        "IBT/grid source dikenali sebagai support daya. ADS tidak menjalankan generator shedding hanya karena area terpisah topologi.",
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  const islandGenerationMw = island.generationMw;
+
+  if (island.loadMw <= 0 && islandGenerationMw > 0 && island.generatorIds.length === 0) {
+    return {
+      status: "blocked",
+      requiredReliefMw: islandGenerationMw,
+      actionType: "OGS_GENERATOR_SHEDDING",
+      scenarioKind: "ogs_surplus",
+      title: `OGS - ${island.id} No Dispatchable Generator`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: "No dispatchable local generator target",
+      explanation:
+        "Area memiliki source MW, tetapi tidak ada generator lokal yang valid untuk OGS. IBT/grid source tidak diperlakukan sebagai generator shedding target.",
+      operatorMessage:
+        "OGS blocked: tidak ada generator lokal yang dapat ditrip secara aman di island ini.",
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  if (island.loadMw <= 0 && islandGenerationMw > 0) {
     return {
       status: "armed",
-      requiredReliefMw: island.sourceMw,
+      requiredReliefMw: islandGenerationMw,
       actionType: "OGS_GENERATOR_SHEDDING",
       scenarioKind: "ogs_surplus",
       title: `OGS - ${island.id} No Load Island`,
@@ -143,42 +352,43 @@ export function evaluateIslandBalance(
       constraint: "Island has generation but no load",
       explanation:
         "Contingency membentuk island tanpa beban lokal. ADS harus melepas pembangkit lokal, bukan mencari load remote.",
-      detectedCondition: `Island ${island.id}: Pgen ${island.sourceMw} MW, Pload 0 MW.`,
+      detectedCondition: `Island ${island.id}: Pgen ${islandGenerationMw} MW, Pload 0 MW.`,
       operatorMessage:
         "Tidak ada target load yang valid di island ini; action valid adalah generator shedding lokal.",
-      generationBeforeMw: island.sourceMw,
+      generationBeforeMw: islandGenerationMw,
       loadBeforeMw: 0,
       generationAfterMw: 0,
       balanceRatioPct: 100,
-      imbalanceBasis: `Island ${island.id} has ${island.sourceMw} MW source and 0 MW load.`,
-      imbalanceFormula: `Required gen trip = ${island.sourceMw} MW`,
-      selectedGeneration: {
-        id: island.generatorIds.length > 1 ? island.generatorIds.join("+") : island.generatorIds[0] ?? "GEN_LOCAL",
+      imbalanceBasis: `Island ${island.id} has ${islandGenerationMw} MW generation and 0 MW load.`,
+      imbalanceFormula: `Required gen trip = ${islandGenerationMw} MW`,
+      selectedGeneration: island.generatorIds.length > 0 ? {
+        id: island.generatorIds.length > 1 ? island.generatorIds.join("+") : island.generatorIds[0],
         name: `${island.generatorIds.join(" + ")} trip`,
         bus: island.buses[0] ?? "C",
-        mw: island.sourceMw,
+        mw: islandGenerationMw,
         priority: 1,
         action: "trip",
-      },
+      } : undefined,
       alternatives: [],
       rejected: [],
     };
   }
 
-  if (island.loadMw > 0 && island.sourceMw > island.loadMw * 1.05) {
-    const requiredReduction = Math.ceil(island.sourceMw - island.loadMw * 1.05);
+  if (island.loadMw > 0 && islandGenerationMw > island.loadMw * 1.05) {
+    const requiredReduction = Math.ceil(islandGenerationMw - island.loadMw * 1.05);
     const decision = rankGenerationShedding(requiredReduction, {
       ...enrichRuleContext("ISLAND_OGS", rule),
       mode: "TRIP MATRIX",
       actionType: "OGS_GENERATOR_SHEDDING",
       scenarioKind: "ogs_surplus",
       affectedBuses: island.buses,
-      islandGenerationMw: island.sourceMw,
+      islandGenerationMw,
       islandLoadMw: island.loadMw,
-      detectedCondition: `Island ${island.id}: Pgen ${island.sourceMw} MW > 105% x Pload ${island.loadMw} MW.`,
+      allowedGeneratorIds: island.generatorIds,
+      detectedCondition: `Island ${island.id}: Pgen ${islandGenerationMw} MW > 105% x Pload ${island.loadMw} MW.`,
       operatorMessage:
         "Island overgeneration terdeteksi. Matrix memilih generator lokal jika final balance tetap 95-105%.",
-      imbalanceBasis: `Island ${island.id}: Pgen ${island.sourceMw} MW, Pload ${island.loadMw} MW.`,
+      imbalanceBasis: `Island ${island.id}: Pgen ${islandGenerationMw} MW, Pload ${island.loadMw} MW.`,
       imbalanceFormula: `Required gen trip >= ${requiredReduction} MW`,
     });
     const ratio = decision.balanceRatioPct ?? 0;
@@ -202,10 +412,10 @@ export function evaluateIslandBalance(
       scenarioKind: "frequency_islanding",
       strictAffectedBuses: true,
       affectedBuses: island.buses,
-      detectedCondition: `Island ${island.id}: Pgen ${island.sourceMw} MW below local load ${island.loadMw} MW.`,
+      detectedCondition: `Island ${island.id}: source ${island.sourceMw} MW below local load ${island.loadMw} MW.`,
       operatorMessage:
         "Island deficit detected. Matrix only arms local loads inside the same electrical island.",
-      imbalanceBasis: `Island ${island.id}: Pgen ${island.sourceMw} MW, Pload ${island.loadMw} MW.`,
+      imbalanceBasis: `Island ${island.id}: Pgen ${islandGenerationMw} MW, Pload ${island.loadMw} MW.`,
       imbalanceFormula: `Required load shed >= ${requiredLoadShedMw} MW`,
     });
   }
@@ -235,6 +445,8 @@ function buildRow(
   island: ElectricalIsland | undefined,
   decision: AdsDecision,
 ): TripMatrixRow {
+  const remedialCommands = buildRemedialCommands(decision);
+
   return {
     triggerId,
     matrixVersion,
@@ -246,10 +458,8 @@ function buildRow(
       objectId: triggerId,
       action: "open",
     },
-    remedialCommands: buildRemedialCommands(decision),
-    selectedTargets:
-      decision.selected?.feeders.map((feeder) => feeder.id) ??
-      (decision.selectedGeneration ? [decision.selectedGeneration.id] : []),
+    remedialCommands,
+    selectedTargets: remedialCommands.map((command) => command.objectId),
     blockedReason: decision.status === "blocked" ? decision.operatorMessage : undefined,
     decision,
   };

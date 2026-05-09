@@ -99,6 +99,7 @@ export interface SourceUnit {
   bus: BusId;
   mw: number;
   state: BreakerState;
+  kind?: "generator" | "grid";
 }
 
 export interface SystemSnapshot {
@@ -116,11 +117,15 @@ export interface ElectricalIsland {
   buses: BusId[];
   nodeIds: string[];
   sourceMw: number;
+  generationMw: number;
+  gridImportMw: number;
   loadMw: number;
   reserveMw: number;
   deficitMw: number;
+  hasGridSource: boolean;
   loadIds: string[];
   generatorIds: string[];
+  gridSourceIds: string[];
   deviceIds: string[];
 }
 

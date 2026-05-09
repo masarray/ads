@@ -29,6 +29,7 @@ interface RankOptions {
   imbalanceFormula?: string;
   steps?: string[];
   passCriteria?: string[];
+  allowedGeneratorIds?: string[];
 }
 
 export function rankShedding(feeders: Feeder[], requiredReliefMw: number, options: RankOptions = {}): AdsDecision {
@@ -105,7 +106,9 @@ export function rankGenerationShedding(requiredReliefMw: number, options: RankOp
   const affectedBuses = new Set(options.affectedBuses ?? []);
   const islandGenerationMw = options.islandGenerationMw;
   const islandLoadMw = options.islandLoadMw;
+  const allowedGeneratorIds = options.allowedGeneratorIds ? new Set(options.allowedGeneratorIds) : null;
   const selectedGeneration = [...generatorActions]
+    .filter((generator) => !allowedGeneratorIds || allowedGeneratorIds.has(generator.id))
     .filter((generator) => affectedBuses.size === 0 || affectedBuses.has(generator.bus))
     .sort((left, right) => {
       if (islandGenerationMw !== undefined && islandLoadMw !== undefined && islandLoadMw > 0) {

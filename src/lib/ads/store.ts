@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { initialFeeders } from "./initialSystem";
-import { applyDecisionTargets, evaluateSystemState, previewToggleWithEvaluator } from "./evaluator";
-import { buildTripMatrixForState, decisionForOpenContingencies, initialContingencyRules, isContingencyObject, previewDecisionForObject } from "./engine";
+import { previewToggleWithEvaluator } from "./evaluator";
+import { buildTripMatrixForState, initialContingencyRules, isContingencyObject, previewDecisionForObject } from "./engine";
 import { rankGenerationShedding, rankShedding } from "./solver";
 import type { AdsDecision, BreakerState, ContingencyRule, Feeder, LoadGroup, ScenarioKind, TripMatrix, TripMatrixRow } from "./model";
 
@@ -630,20 +630,24 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     if (patch.priority !== undefined) nextPatch.priority = Math.max(1, Math.min(5, Math.round(patch.priority)));
     if (patch.group !== undefined) nextPatch.group = Math.max(1, Math.min(4, Math.round(patch.group))) as LoadGroup;
     if (patch.shedEligible !== undefined) nextPatch.shedEligible = patch.shedEligible;
-    const feeders = get().feeders.map((feeder) => feeder.id === id ? { ...feeder, ...nextPatch } : feeder);
+
+    const feeders = get().feeders.map((feeder) =>
+      feeder.id === id ? { ...feeder, ...nextPatch } : feeder
+    );
     const objectStates = {
       ...get().objectStates,
       ...Object.fromEntries(feeders.map((feeder) => [feeder.id, feeder.breakerState]))
     };
     const scopedRules = contextualRulesForTopology(get().contingencyRules, objectStates);
     const tripMatrix = buildMatrix(feeders, objectStates, scopedRules, get().sourceMw, get().minReserveMw, get().frequencyHz);
-    const decision = decisionForOpenContingencies(objectStates, feeders, scopedRules) ?? rankShedding(feeders, get().requiredReliefMw);
+    const hoverRow = get().hoverObjectId ? tripMatrix.rows[get().hoverObjectId] : undefined;
+
     set({
       feeders,
       objectStates,
       ...matrixState(tripMatrix),
-      decision,
-      hoverDecision: previewDecisionForTopology(get().hoverObjectId, feeders, objectStates, scopedRules)
+      decision: get().decision.status === "executed" ? get().decision : rankShedding(feeders, 0),
+      hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null
     });
   },
   updateContingency: (id, patch) => {
@@ -662,12 +666,12 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     const feeders = get().feeders;
     const scopedRules = contextualRulesForTopology(contingencyRules, get().objectStates);
     const tripMatrix = buildMatrix(feeders, get().objectStates, scopedRules, get().sourceMw, get().minReserveMw, get().frequencyHz);
-    const decision = decisionForOpenContingencies(get().objectStates, feeders, scopedRules) ?? rankShedding(feeders, get().requiredReliefMw);
+    const hoverRow = get().hoverObjectId ? tripMatrix.rows[get().hoverObjectId] : undefined;
+
     set({
       contingencyRules,
       ...matrixState(tripMatrix),
-      decision,
-      hoverDecision: previewDecisionForTopology(get().hoverObjectId, feeders, get().objectStates, scopedRules)
+      hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null
     });
   },
   setReserveConfig: (patch) => {
@@ -688,110 +692,126 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     });
   },
   toggleObject: (objectId) => {
-    const baseRules = get().contingencyRules;
-    const matrixRow = get().tripMatrix.rows[objectId];
-    const canExecuteMatrixRow = matrixRow?.snapshotHash === get().snapshotHash;
-    const toggledFeederBefore = get().feeders.find((feeder) => feeder.id === objectId);
-    const isOperatorLoadToggle = Boolean(toggledFeederBefore);
-    const current = get().objectStates[objectId] ?? "closed";
-    const next: BreakerState = current === "closed" ? "open" : "closed";
-    const baseFeeders = get().feeders.map((feeder) =>
-      feeder.id === objectId ? { ...feeder, breakerState: next } : feeder
-    );
-    const objectStates = {
-      ...get().objectStates,
-      [objectId]: next
-    };
-    const rules = contextualRulesForTopology(baseRules, objectStates);
-    const formsBusCIsland = next === "open" && (objectId === "LINE_AC" || objectId === "LINE_BC") && isBusCIslanded(objectStates);
-    const shouldExecuteClickedMatrixRow =
-      !isOperatorLoadToggle &&
-      next === "open" &&
-      isContingencyObject(objectId, rules) &&
-      !formsBusCIsland;
-    let feeders = baseFeeders;
-    let decision = evaluateSystemState(feeders, objectStates);
-    let matrixExecutionEvents: string[] = [];
-    let appliedMatrixTargets: string[] = [];
-    if (shouldExecuteClickedMatrixRow) {
-      if (canExecuteMatrixRow && matrixRow && matrixRow.status === "armed") {
-        const applied = executeTripMatrixRowState(matrixRow, get().feeders, get().objectStates);
-        feeders = applied.feeders;
-        Object.assign(objectStates, applied.objectStates);
-        matrixExecutionEvents = applied.events;
-        appliedMatrixTargets = applied.appliedTargets;
-        decision = { ...matrixRow.decision, status: "executed", mode: "LIVE ADS EXECUTION" };
-      } else if (canExecuteMatrixRow && matrixRow) {
-        decision = { ...matrixRow.decision, status: "blocked", mode: "LIVE ADS EXECUTION" };
-      } else {
-        decision = {
-            status: "blocked",
-            requiredReliefMw: 0,
-            actionType: "ISLAND_BALANCING",
-            title: "Stale Trip Matrix",
-            mode: "LIVE ADS EXECUTION",
-            constraint: "Matrix snapshot mismatch",
-            explanation: "ADS menolak eksekusi karena trip matrix tidak cocok dengan snapshot sistem saat click.",
-            operatorMessage: "Matrix stale. Rebuild matrix sebelum mengirim command trip.",
-            alternatives: [],
-            rejected: []
-          };
-      }
-    } else if (!isOperatorLoadToggle && decision.status === "normal") {
-      decision = decisionForOpenContingencies(objectStates, feeders, rules) ?? decision;
-    }
-    const eventItems = [`${objectId} ${next === "closed" ? "closed/energized" : "opened/dead"}.`];
-    if (shouldExecuteClickedMatrixRow && canExecuteMatrixRow && matrixRow) {
-      eventItems.push(
-        `Trip matrix audit: trigger=${objectId}, preSnapshot=${get().snapshotHash}, rowSnapshot=${matrixRow.snapshotHash}, rowStatus=${matrixRow.status}, targets=${matrixRow.selectedTargets.join(", ") || "none"}.`
+    const currentStore = get();
+    const currentState = currentStore.objectStates[objectId] ?? "closed";
+    const nextState: BreakerState = currentState === "closed" ? "open" : "closed";
+    const isLoad = currentStore.feeders.some((feeder) => feeder.id === objectId);
+    const eventItems: string[] = [];
+
+    // Operator load operation is always manual. It must never execute ADS targets.
+    if (isLoad) {
+      const feeders = currentStore.feeders.map((feeder) =>
+        feeder.id === objectId ? { ...feeder, breakerState: nextState } : feeder
       );
-      for (const command of matrixRow.remedialCommands) {
-        eventItems.push(`Trip matrix command ready: ${command.objectId} ${command.action} (${command.mw} MW).`);
+      const objectStates = {
+        ...currentStore.objectStates,
+        [objectId]: nextState,
+      };
+      const rules = contextualRulesForTopology(currentStore.contingencyRules, objectStates);
+      const tripMatrix = buildMatrix(
+        feeders,
+        objectStates,
+        rules,
+        currentStore.sourceMw,
+        currentStore.minReserveMw,
+        currentStore.frequencyHz,
+      );
+      const hoverRow = currentStore.hoverObjectId ? tripMatrix.rows[currentStore.hoverObjectId] : undefined;
+
+      set({
+        feeders,
+        objectStates,
+        ...matrixState(tripMatrix),
+        decision: currentStore.decision.status === "executed"
+          ? currentStore.decision
+          : rankShedding(feeders, 0),
+        hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null,
+        activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
+        eventLog: [`Manual load toggle: ${objectId} ${nextState}.`, ...currentStore.eventLog].slice(0, 120),
+      });
+      return;
+    }
+
+    const row = currentStore.tripMatrix.rows[objectId];
+    const rowIsFresh = Boolean(row && row.snapshotHash === currentStore.snapshotHash);
+    const isContingencyTrigger = isContingencyObject(objectId, currentStore.contingencyRules);
+
+    let feeders = currentStore.feeders;
+    let objectStates = { ...currentStore.objectStates };
+    let decision: AdsDecision = currentStore.decision;
+
+    if (nextState === "open" && isContingencyTrigger) {
+      if (!rowIsFresh || !row) {
+        objectStates[objectId] = nextState;
+        decision = {
+          status: "blocked",
+          requiredReliefMw: 0,
+          actionType: "ISLAND_BALANCING",
+          title: "Stale Trip Matrix",
+          mode: "LIVE ADS EXECUTION",
+          constraint: "Matrix snapshot mismatch",
+          explanation: "ADS menolak eksekusi karena Trip Matrix tidak cocok dengan snapshot sistem saat click.",
+          operatorMessage: "Matrix stale. Rebuild matrix sebelum mengirim command trip.",
+          alternatives: [],
+          rejected: [],
+        };
+        eventItems.push(`Trip matrix stale: trigger=${objectId}, currentSnapshot=${currentStore.snapshotHash}.`);
+      } else if (row.status === "armed") {
+        const applied = executeTripMatrixRowState(row, currentStore.feeders, currentStore.objectStates);
+        feeders = applied.feeders;
+        objectStates = applied.objectStates;
+        decision = { ...row.decision, status: "executed", mode: "LIVE ADS EXECUTION" };
+        eventItems.push(
+          `Trip matrix executed: trigger=${objectId}, snapshot=${row.snapshotHash}, targets=${row.selectedTargets.join(", ") || "none"}.`,
+          ...applied.events,
+          `Trip matrix applied targets: ${applied.appliedTargets.join(", ") || "none"}.`,
+        );
+      } else {
+        objectStates[objectId] = nextState;
+        decision = { ...row.decision, mode: "LIVE ADS EXECUTION" };
+        eventItems.push(`Trip matrix row not armed: trigger=${objectId}, status=${row.status}. Trigger opened only.`);
       }
-      eventItems.push(...matrixExecutionEvents);
-      eventItems.push(`Trip matrix applied targets: ${appliedMatrixTargets.join(", ") || "none"}.`);
+    } else {
+      // Manual network operation / reclose. Do not execute ADS targets.
+      objectStates[objectId] = nextState;
+      decision = currentStore.decision.status === "executed"
+        ? currentStore.decision
+        : rankShedding(feeders, 0);
+      eventItems.push(`Manual network toggle: ${objectId} ${nextState}.`);
     }
 
-    if (!shouldExecuteClickedMatrixRow && !isOperatorLoadToggle && decision.status === "armed") {
-      const applied = applyDecisionTargets(feeders, objectStates, decision);
-      feeders = applied.feeders;
-      Object.assign(objectStates, applied.objectStates);
-      eventItems.push(...applied.events);
-      decision = { ...decision, status: "executed", mode: "LIVE ADS EXECUTION" };
-    }
-
-    if (!isOperatorLoadToggle && decision.status === "normal" && next === "open" && formsBusCIsland) {
-      decision = evaluateBusCOgs(feeders, objectStates, eventItems) ?? decision;
-    }
-
-    const tripMatrix = buildMatrix(feeders, objectStates, rules, get().sourceMw, get().minReserveMw, get().frequencyHz);
+    const rules = contextualRulesForTopology(currentStore.contingencyRules, objectStates);
+    const tripMatrix = buildMatrix(
+      feeders,
+      objectStates,
+      rules,
+      currentStore.sourceMw,
+      currentStore.minReserveMw,
+      currentStore.frequencyHz,
+    );
 
     set({
       feeders,
       objectStates,
       ...matrixState(tripMatrix),
       decision,
-      hoverDecision: Object.values(objectStates).some((state) => state === "open")
-        ? null
-        : previewDecisionForTopology(get().hoverObjectId, feeders, objectStates, rules),
+      hoverDecision: null,
       activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
-      eventLog: [...eventItems, ...get().eventLog].slice(0, 120)
+      eventLog: eventItems.length
+        ? [...eventItems, ...currentStore.eventLog].slice(0, 120)
+        : [`${objectId} ${nextState}.`, ...currentStore.eventLog].slice(0, 120),
     });
   },
   setHoverObject: (hoverObjectId) => {
     if (get().hoverObjectId === hoverObjectId) return;
-    const rules = contextualRulesForTopology(get().contingencyRules, get().objectStates);
-    const isOpenContingency = Boolean(
-      hoverObjectId && isContingencyObject(hoverObjectId, rules) && get().objectStates[hoverObjectId] === "open"
-    );
     const matrixRow = hoverObjectId ? get().tripMatrix.rows[hoverObjectId] : undefined;
     const matrixDecision =
       matrixRow?.snapshotHash === get().snapshotHash ? matrixRow.decision : null;
+
     set({
       hoverObjectId,
-      hoverDecision: isOpenContingency
-        ? get().decision
-        : matrixDecision ?? previewDecisionForTopology(hoverObjectId, get().feeders, get().objectStates, rules)
+      hoverDecision: matrixDecision,
     });
   }
+
 }));
