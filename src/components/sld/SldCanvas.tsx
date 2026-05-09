@@ -123,9 +123,9 @@ export function SldCanvas() {
   const substationPowerCards = useMemo(
     () =>
       [
-        { id: "A", name: "Substation A", x: 240, y: 420 },
-        { id: "B", name: "Substation B", x: 700, y: 29 },
-        { id: "C", name: "Substation C", x: 1350, y: 400 },
+        { id: "A", name: "Substation A", x: 260, y: 390 },
+        { id: "B", name: "Substation B", x: 700, y: 27 },
+        { id: "C", name: "Substation C", x: 1350, y: 390 },
       ].map((card) => {
         const islands = tripMatrix.topology.islands.filter((island) =>
           island.buses.includes(card.id as "A" | "B" | "C"),
@@ -138,12 +138,16 @@ export function SldCanvas() {
           (sum, island) => sum + island.gridImportMw,
           0,
         );
-        const source = islands.reduce((sum, island) => sum + island.sourceMw, 0);
+        const source = islands.reduce(
+          (sum, island) => sum + island.sourceMw,
+          0,
+        );
         const load = islands.reduce((sum, island) => sum + island.loadMw, 0);
         const rawMargin = source - load;
         const lowerLimit = load * 0.95;
         const upperLimit = load * 1.05;
-        const balancePct = load > 0 ? (source / load) * 100 : source > 0 ? Infinity : 100;
+        const balancePct =
+          load > 0 ? (source / load) * 100 : source > 0 ? Infinity : 100;
         const hasGridSource = islands.some((island) => island.hasGridSource);
         const isSplit = tripMatrix.topology.islands.length > 1;
         const isPureIsland = isSplit && !hasGridSource;
@@ -532,24 +536,23 @@ export function SldCanvas() {
     const addTripChip = (node: Element, objectId: string) =>
       addRuntimeChip(node, objectId, "TRIPPED");
 
-    const applyVisualHint = (
-      objectId: string,
-      classes: string[],
-      label?: "ARMED" | "RUNBACK",
-    ) => {
-      if (objectStates[objectId] === "open" || objectStates[objectId] === "failed") return;
+    const applyVisualHint = (objectId: string, classes: string[]) => {
+      if (
+        objectStates[objectId] === "open" ||
+        objectStates[objectId] === "failed"
+      )
+        return;
 
       root
         .querySelectorAll(`[data-object="${CSS.escape(objectId)}"]`)
         .forEach((node) => {
           node.classList.add(...classes);
-          if (label && objectId.startsWith("GEN_")) {
-            addRuntimeChip(node, objectId, label);
-          }
         });
 
       for (const mappedId of feederElementMap[objectId] ?? [objectId]) {
-        root.querySelector(`#${CSS.escape(mappedId)}`)?.classList.add(...classes);
+        root
+          .querySelector(`#${CSS.escape(mappedId)}`)
+          ?.classList.add(...classes);
       }
     };
 
@@ -584,11 +587,11 @@ export function SldCanvas() {
     }
 
     for (const objectId of armedTargetIds) {
-      applyVisualHint(objectId, ["svg-armed", "svg-selected"], "ARMED");
+      applyVisualHint(objectId, ["svg-armed", "svg-selected"]);
     }
 
     for (const objectId of runbackTargetIds) {
-      applyVisualHint(objectId, ["svg-runback"], "RUNBACK");
+      applyVisualHint(objectId, ["svg-runback"]);
     }
   }, [
     contingencyRules,
@@ -755,24 +758,32 @@ export function SldCanvas() {
                   <strong>{card.adsNeed} MW</strong>
                 </div>
                 <footer>
-                  <small>{card.rawMargin >= 0 ? "Raw margin" : "Raw shortage"}</small>
-                  <strong>{card.rawMargin >= 0 ? "+" : ""}{card.rawMargin} MW</strong>
+                  <small>
+                    {card.rawMargin >= 0 ? "Raw margin" : "Raw shortage"}
+                  </small>
+                  <strong>
+                    {card.rawMargin >= 0 ? "+" : ""}
+                    {card.rawMargin} MW
+                  </strong>
                 </footer>
                 <section className="substation-flow-tooltip">
                   <strong>{card.name} balance reasoning</strong>
                   <p>
-                    Local Gen {card.localGen} MW + IBT/Grid {card.gridImport} MW =
-                    Total Source {card.source} MW. Load {card.load} MW.
+                    Local Gen {card.localGen} MW + IBT/Grid {card.gridImport} MW
+                    = Total Source {card.source} MW. Load {card.load} MW.
                   </p>
                   <p>
-                    Raw margin = {card.source} - {card.load} = {card.rawMargin} MW.
-                    Balance = {Number.isFinite(card.balancePct)
+                    Raw margin = {card.source} - {card.load} = {card.rawMargin}{" "}
+                    MW. Balance ={" "}
+                    {Number.isFinite(card.balancePct)
                       ? `${card.balancePct.toFixed(1)}%`
-                      : "∞"}.
+                      : "∞"}
+                    .
                   </p>
                   <p>
-                    ADS lower limit = 95% × {card.load} = {card.lowerLimit.toFixed(1)} MW.
-                    Upper limit = 105% × {card.load} = {card.upperLimit.toFixed(1)} MW.
+                    ADS lower limit = 95% × {card.load} ={" "}
+                    {card.lowerLimit.toFixed(1)} MW. Upper limit = 105% ×{" "}
+                    {card.load} = {card.upperLimit.toFixed(1)} MW.
                   </p>
                   <p>
                     {card.status === "watch"

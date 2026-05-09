@@ -25,6 +25,20 @@ export function ReasoningRail() {
     ? displayDecision.requiredReliefMw
     : requiredReliefMw;
   const remainingNeed = isExecuted ? 0 : displayRequired;
+  const isOgsDecision =
+    displayDecision.actionType === "OGS_GENERATOR_SHEDDING" ||
+    displayDecision.scenarioKind === "ogs_surplus";
+  const decisionMessage = `${displayDecision.operatorMessage ?? ""} ${displayDecision.constraint ?? ""}`.toLowerCase();
+  const needsRunback =
+    hasDecisionView &&
+    isOgsDecision &&
+    displayDecision.status === "blocked" &&
+    !displayDecision.selectedGeneration &&
+    (decisionMessage.includes("runback") ||
+      decisionMessage.includes("95-105") ||
+      decisionMessage.includes("overgeneration") ||
+      decisionMessage.includes("surplus") ||
+      displayDecision.requiredReliefMw > 0);
   const totalLoad = feeders
     .filter((feeder) => feeder.breakerState === "closed")
     .reduce((sum, feeder) => sum + feeder.mw, 0);
@@ -35,7 +49,7 @@ export function ReasoningRail() {
     (displayDecision.status !== "blocked"
       ? displayDecision.selectedGeneration?.name
       : undefined) ??
-    "No target armed";
+    (needsRunback ? "Generator runback required" : "No target armed");
   const selectedMw = displayDecision.selected?.selectedMw ?? 0;
   const generationMw =
     displayDecision.status !== "blocked"
@@ -96,9 +110,17 @@ export function ReasoningRail() {
             </b>
           </div>
           <div>
-            <small>{displayDecision.selectedGeneration ? "Gen Trip" : isExecuted ? "Tripped" : "Load Shed"}</small>
+            <small>
+              {isOgsDecision
+                ? needsRunback
+                  ? "Gen Runback"
+                  : "Gen Trip"
+                : isExecuted
+                  ? "Tripped"
+                  : "Load Shed"}
+            </small>
             <b>
-              {selectedMw || generationMw}
+              {selectedMw || generationMw || (needsRunback ? displayRequired : 0)}
               <span>MW</span>
             </b>
           </div>
@@ -179,7 +201,7 @@ export function ReasoningRail() {
           <section
             className="logic-target logic-animated"
             data-active={
-              displayDecision.selected || displayDecision.selectedGeneration
+              displayDecision.selected || displayDecision.selectedGeneration || needsRunback
                 ? "true"
                 : "false"
             }
@@ -198,7 +220,9 @@ export function ReasoningRail() {
                   : displayDecision.selected.reason
                 : displayDecision.selectedGeneration && displayDecision.status !== "blocked"
                   ? `${displayDecision.selectedGeneration.name} dipilih untuk ${displayDecision.selectedGeneration.action} sebesar ${displayDecision.selectedGeneration.mw} MW. Final Pgen ${displayDecision.generationAfterMw ?? "-"} MW terhadap Pload ${displayDecision.loadBeforeMw ?? "-"} MW${displayDecision.balanceRatioPct ? `, ratio ${displayDecision.balanceRatioPct.toFixed(1)}%` : ""}.`
-                  : displayDecision.status === "blocked"
+                  : displayDecision.status === "blocked" && needsRunback
+                    ? `OGS terdeteksi, tetapi open CB generator tidak aman untuk menjaga island di 95–105%. Gunakan generator runback sekitar ${displayRequired} MW, bukan hard trip breaker.`
+                : displayDecision.status === "blocked"
                     ? displayDecision.operatorMessage ?? "ADS blocked karena tidak ada target yang valid untuk constraint ini."
                   : "Tidak ada shedding karena sistem masih aman atau belum ada constraint aktif."}
             </p>
@@ -215,6 +239,8 @@ export function ReasoningRail() {
                   ? `Area ${displayDecision.affectedBuses?.join("/") ?? "system"} paling relevan, overshed ${overshed} MW, dan hanya ${operations} operasi CB.`
                   : displayDecision.selectedGeneration && displayDecision.status !== "blocked"
                     ? `Area ${displayDecision.selectedGeneration.bus} surplus generation. Aksi ${displayDecision.selectedGeneration.action} memberi koreksi ${displayDecision.selectedGeneration.mw} MW dan membawa balance ke ${displayDecision.balanceRatioPct?.toFixed(1) ?? "-"}%.`
+                    : displayDecision.status === "blocked" && needsRunback
+                      ? "OGS condition valid, tetapi tidak ada kombinasi CB trip generator yang menjaga balance 95–105%; kandidat ditampilkan sebagai runback visual hint saja."
                     : displayDecision.status === "blocked"
                       ? "ADS menolak eksekusi karena kandidat yang tersedia akan membuat sistem keluar batas aman."
                   : "Tidak ada overload, islanding, atau relief request yang perlu dieksekusi."}
@@ -227,6 +253,8 @@ export function ReasoningRail() {
                   ? `${rejectedCount} kandidat lain ditolak. ${firstAlternative.feeders.map((feeder) => feeder.name).join(" + ")}: ${firstAlternative.rejection ?? `score lebih buruk, overshed ${firstAlternative.overshedMw} MW.`}`
                   : displayDecision.selectedGeneration && displayDecision.status !== "blocked"
                     ? "Load tidak dipilih karena skenario ini adalah OGS: masalahnya surplus pembangkit, sehingga load shedding justru memperburuk overfrequency."
+                    : displayDecision.status === "blocked" && needsRunback
+                      ? "Load shedding tidak dipilih karena skenario ini adalah overgeneration; open semua/salah satu generator juga tidak valid. Solusi yang benar adalah runback output generator."
                     : displayDecision.status === "blocked"
                       ? "Tidak ada kombinasi lokal yang memenuhi batas area/topologi dan toleransi balance."
                   : "Tidak ada alternatif yang perlu dibandingkan saat sistem normal."}
