@@ -101,6 +101,7 @@ export function SldCanvas() {
   const requiredReliefMw = useAdsStore((state) => state.requiredReliefMw);
   const frequencyHz = useAdsStore((state) => state.frequencyHz);
   const hoverDecision = useAdsStore((state) => state.hoverDecision);
+  const hoverObjectId = useAdsStore((state) => state.hoverObjectId);
   const toggleObject = useAdsStore((state) => state.toggleObject);
   const setHoverObject = useAdsStore((state) => state.setHoverObject);
   const displayDecision = hoverDecision ?? decision;
@@ -122,8 +123,8 @@ export function SldCanvas() {
   const substationPowerCards = useMemo(
     () =>
       [
-        { id: "A", name: "Substation A", x: 240, y: 400 },
-        { id: "B", name: "Substation B", x: 700, y: 25 },
+        { id: "A", name: "Substation A", x: 240, y: 420 },
+        { id: "B", name: "Substation B", x: 700, y: 29 },
         { id: "C", name: "Substation C", x: 1350, y: 400 },
       ].map((card) => {
         const islands = tripMatrix.topology.islands.filter((island) =>
@@ -137,16 +138,12 @@ export function SldCanvas() {
           (sum, island) => sum + island.gridImportMw,
           0,
         );
-        const source = islands.reduce(
-          (sum, island) => sum + island.sourceMw,
-          0,
-        );
+        const source = islands.reduce((sum, island) => sum + island.sourceMw, 0);
         const load = islands.reduce((sum, island) => sum + island.loadMw, 0);
         const rawMargin = source - load;
         const lowerLimit = load * 0.95;
         const upperLimit = load * 1.05;
-        const balancePct =
-          load > 0 ? (source / load) * 100 : source > 0 ? Infinity : 100;
+        const balancePct = load > 0 ? (source / load) * 100 : source > 0 ? Infinity : 100;
         const hasGridSource = islands.some((island) => island.hasGridSource);
         const isSplit = tripMatrix.topology.islands.length > 1;
         const isPureIsland = isSplit && !hasGridSource;
@@ -201,14 +198,37 @@ export function SldCanvas() {
       }),
     [tripMatrix],
   );
-  const selectedIds = useMemo(
-    () =>
-      new Set(
-        (hoverDecision ?? decision).selected?.feeders.map(
-          (feeder) => feeder.id,
-        ) ?? [],
-      ),
-    [decision, hoverDecision],
+  const activeMatrixRow = useMemo(() => {
+    if (!hoverObjectId) return undefined;
+    const row = tripMatrix.rows[hoverObjectId];
+    return row?.snapshotHash === tripMatrix.snapshotHash ? row : undefined;
+  }, [hoverObjectId, tripMatrix]);
+
+  const armedTargetIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    for (const id of activeMatrixRow?.visualHints?.blinkArmedTargetIds ?? []) {
+      ids.add(id);
+    }
+
+    for (const command of activeMatrixRow?.remedialCommands ?? []) {
+      if (activeMatrixRow?.status === "armed") ids.add(command.objectId);
+    }
+
+    const shownDecision = hoverDecision ?? decision;
+    for (const feeder of shownDecision.selected?.feeders ?? []) {
+      ids.add(feeder.id);
+    }
+    for (const id of shownDecision.selectedGeneration?.id.split("+") ?? []) {
+      if (id) ids.add(id);
+    }
+
+    return ids;
+  }, [activeMatrixRow, decision, hoverDecision]);
+
+  const runbackTargetIds = useMemo(
+    () => new Set(activeMatrixRow?.visualHints?.runbackCandidateIds ?? []),
+    [activeMatrixRow],
   );
   const clampedZoom = Math.min(maxZoom, Math.max(minZoom, zoom));
   const scaledWidth = sldNativeWidth * clampedZoom;
@@ -421,16 +441,21 @@ export function SldCanvas() {
 
     root
       .querySelectorAll(
-        ".svg-armed,.svg-selected,.svg-tripped,.svg-open,.cb-open,.cb-closed,.feeder-on,.feeder-off,.runtime-trip-chip",
+        ".svg-armed,.svg-selected,.svg-runback,.svg-tripped,.svg-open,.cb-open,.cb-closed,.feeder-on,.feeder-off,.runtime-trip-chip,.runtime-arm-chip,.runtime-runback-chip",
       )
       .forEach((element) => {
-        if (element.classList.contains("runtime-trip-chip")) {
+        if (
+          element.classList.contains("runtime-trip-chip") ||
+          element.classList.contains("runtime-arm-chip") ||
+          element.classList.contains("runtime-runback-chip")
+        ) {
           element.remove();
           return;
         }
         element.classList.remove(
           "svg-armed",
           "svg-selected",
+          "svg-runback",
           "svg-tripped",
           "svg-open",
           "cb-open",
@@ -463,22 +488,33 @@ export function SldCanvas() {
       }
     };
 
-    const addTripChip = (node: Element, objectId: string) => {
+    const addRuntimeChip = (
+      node: Element,
+      objectId: string,
+      label: "TRIPPED" | "ARMED" | "RUNBACK",
+    ) => {
       if (!(node instanceof SVGGraphicsElement)) return;
+      const chipClass =
+        label === "RUNBACK"
+          ? "runtime-runback-chip"
+          : label === "ARMED"
+            ? "runtime-arm-chip"
+            : "runtime-trip-chip";
       const body = node.querySelector<SVGGraphicsElement>(".cb-body");
       const box = (body ?? node).getBBox();
       const centerX = box.x + box.width / 2;
       const centerY = box.y + box.height / 2;
       const chip = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      chip.setAttribute("class", "runtime-trip-chip");
+      chip.setAttribute("class", chipClass);
       chip.setAttribute("data-chip-for", objectId);
+      const width = label === "RUNBACK" ? 50 : 42;
       const rect = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "rect",
       );
-      rect.setAttribute("x", String(centerX - 20));
+      rect.setAttribute("x", String(centerX - width / 2));
       rect.setAttribute("y", String(centerY - 8));
-      rect.setAttribute("width", "40");
+      rect.setAttribute("width", String(width));
       rect.setAttribute("height", "16");
       rect.setAttribute("rx", "8");
       const text = document.createElementNS(
@@ -488,9 +524,33 @@ export function SldCanvas() {
       text.setAttribute("x", String(centerX));
       text.setAttribute("y", String(centerY + 3));
       text.setAttribute("text-anchor", "middle");
-      text.textContent = "TRIPPED";
+      text.textContent = label;
       chip.append(rect, text);
       node.parentElement?.appendChild(chip);
+    };
+
+    const addTripChip = (node: Element, objectId: string) =>
+      addRuntimeChip(node, objectId, "TRIPPED");
+
+    const applyVisualHint = (
+      objectId: string,
+      classes: string[],
+      label?: "ARMED" | "RUNBACK",
+    ) => {
+      if (objectStates[objectId] === "open" || objectStates[objectId] === "failed") return;
+
+      root
+        .querySelectorAll(`[data-object="${CSS.escape(objectId)}"]`)
+        .forEach((node) => {
+          node.classList.add(...classes);
+          if (label && objectId.startsWith("GEN_")) {
+            addRuntimeChip(node, objectId, label);
+          }
+        });
+
+      for (const mappedId of feederElementMap[objectId] ?? [objectId]) {
+        root.querySelector(`#${CSS.escape(mappedId)}`)?.classList.add(...classes);
+      }
     };
 
     for (const [objectId, state] of Object.entries(objectStates)) {
@@ -521,32 +581,25 @@ export function SldCanvas() {
         `MW_${feeder.id}`,
         `${feeder.breakerState === "closed" ? feeder.mw : 0} MW`,
       );
-      if (
-        hoverDecision &&
-        hoverDecision.status !== "executed" &&
-        selectedIds.has(feeder.id)
-      ) {
-        root
-          .querySelectorAll(`[data-object="${CSS.escape(feeder.id)}"]`)
-          .forEach((node) => {
-            node.classList.add("svg-armed", "svg-selected");
-          });
-        for (const mappedId of feederElementMap[feeder.id] ?? [feeder.id]) {
-          root
-            .querySelector(`#${CSS.escape(mappedId)}`)
-            ?.classList.add("svg-armed", "svg-selected");
-        }
-      }
+    }
+
+    for (const objectId of armedTargetIds) {
+      applyVisualHint(objectId, ["svg-armed", "svg-selected"], "ARMED");
+    }
+
+    for (const objectId of runbackTargetIds) {
+      applyVisualHint(objectId, ["svg-runback"], "RUNBACK");
     }
   }, [
     contingencyRules,
     decision,
     displayDecision,
     feeders,
+    armedTargetIds,
     hoverDecision,
     loaded,
     objectStates,
-    selectedIds,
+    runbackTargetIds,
   ]);
 
   return (
@@ -702,32 +755,24 @@ export function SldCanvas() {
                   <strong>{card.adsNeed} MW</strong>
                 </div>
                 <footer>
-                  <small>
-                    {card.rawMargin >= 0 ? "Raw margin" : "Raw shortage"}
-                  </small>
-                  <strong>
-                    {card.rawMargin >= 0 ? "+" : ""}
-                    {card.rawMargin} MW
-                  </strong>
+                  <small>{card.rawMargin >= 0 ? "Raw margin" : "Raw shortage"}</small>
+                  <strong>{card.rawMargin >= 0 ? "+" : ""}{card.rawMargin} MW</strong>
                 </footer>
                 <section className="substation-flow-tooltip">
                   <strong>{card.name} balance reasoning</strong>
                   <p>
-                    Local Gen {card.localGen} MW + IBT/Grid {card.gridImport} MW
-                    = Total Source {card.source} MW. Load {card.load} MW.
+                    Local Gen {card.localGen} MW + IBT/Grid {card.gridImport} MW =
+                    Total Source {card.source} MW. Load {card.load} MW.
                   </p>
                   <p>
-                    Raw margin = {card.source} - {card.load} = {card.rawMargin}{" "}
-                    MW. Balance ={" "}
-                    {Number.isFinite(card.balancePct)
+                    Raw margin = {card.source} - {card.load} = {card.rawMargin} MW.
+                    Balance = {Number.isFinite(card.balancePct)
                       ? `${card.balancePct.toFixed(1)}%`
-                      : "∞"}
-                    .
+                      : "∞"}.
                   </p>
                   <p>
-                    ADS lower limit = 95% × {card.load} ={" "}
-                    {card.lowerLimit.toFixed(1)} MW. Upper limit = 105% ×{" "}
-                    {card.load} = {card.upperLimit.toFixed(1)} MW.
+                    ADS lower limit = 95% × {card.load} = {card.lowerLimit.toFixed(1)} MW.
+                    Upper limit = 105% × {card.load} = {card.upperLimit.toFixed(1)} MW.
                   </p>
                   <p>
                     {card.status === "watch"

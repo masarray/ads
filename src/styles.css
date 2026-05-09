@@ -2708,11 +2708,29 @@ button {
   animation: arming-glow 950ms ease-in-out infinite;
 }
 
-.sld-canvas .runtime-trip-chip {
+.sld-canvas .svg-runback .cb-body {
+  fill: #c084fc !important;
+  stroke: #f5d0fe !important;
+  stroke-width: 3px !important;
+  animation: runback-glow 1100ms ease-in-out infinite;
+}
+
+.sld-canvas .svg-runback path[id^="Arrow"],
+.sld-canvas path.svg-runback[id^="Arrow"] {
+  fill: #c084fc !important;
+  stroke: #c084fc !important;
+  animation: runback-glow 1100ms ease-in-out infinite;
+}
+
+.sld-canvas .runtime-trip-chip,
+.sld-canvas .runtime-arm-chip,
+.sld-canvas .runtime-runback-chip {
   pointer-events: none;
 }
 
-.sld-canvas .runtime-trip-chip rect {
+.sld-canvas .runtime-trip-chip rect,
+.sld-canvas .runtime-arm-chip rect,
+.sld-canvas .runtime-runback-chip rect {
   fill: #ffd166;
   stroke: rgba(255, 248, 214, 0.98);
   stroke-width: 1.2;
@@ -2720,11 +2738,30 @@ button {
     drop-shadow(0 0 10px rgba(255, 209, 102, 0.8));
 }
 
-.sld-canvas .runtime-trip-chip text {
+.sld-canvas .runtime-trip-chip text,
+.sld-canvas .runtime-arm-chip text,
+.sld-canvas .runtime-runback-chip text {
   fill: #2a1900 !important;
   font-size: 7px;
   font-weight: 900;
   letter-spacing: 0.04em;
+}
+
+.sld-canvas .runtime-arm-chip rect {
+  fill: #ffd166;
+  stroke: rgba(255, 248, 214, 0.98);
+  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.85));
+}
+
+.sld-canvas .runtime-runback-chip rect {
+  fill: #c084fc;
+  stroke: rgba(245, 208, 254, 0.98);
+  filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.85));
+}
+
+.sld-canvas .runtime-runback-chip text {
+  fill: #21002f !important;
+  font-size: 6.5px;
 }
 
 @keyframes arming-glow {
@@ -2735,6 +2772,17 @@ button {
   50% {
     filter: drop-shadow(0 0 4px rgba(255, 248, 214, 0.95))
       drop-shadow(0 0 14px rgba(255, 209, 102, 0.85));
+  }
+}
+
+@keyframes runback-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px rgba(245, 208, 254, 0.55));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px rgba(245, 208, 254, 0.98))
+      drop-shadow(0 0 16px rgba(192, 132, 252, 0.9));
   }
 }
 

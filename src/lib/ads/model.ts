@@ -136,6 +136,14 @@ export interface TopologyModel {
   generatorIslandMap: Record<string, string>;
 }
 
+
+export interface TripMatrixVisualHints {
+  highlightTriggerIds: string[];
+  blinkArmedTargetIds: string[];
+  runbackCandidateIds: string[];
+  dimOutOfScopeIds: string[];
+}
+
 export interface TripMatrixRow {
   triggerId: string;
   matrixVersion: number;
@@ -155,6 +163,7 @@ export interface TripMatrixRow {
     reason: string;
   }>;
   selectedTargets: string[];
+  visualHints: TripMatrixVisualHints;
   blockedReason?: string;
   decision: AdsDecision;
 }

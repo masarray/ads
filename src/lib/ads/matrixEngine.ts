@@ -202,6 +202,7 @@ function alreadyOpenRow(
     },
     remedialCommands: [],
     selectedTargets: [],
+    visualHints: emptyVisualHints(triggerId),
     decision,
   };
 }
@@ -621,6 +622,7 @@ function buildRow(
   decision: AdsDecision,
 ): TripMatrixRow {
   const remedialCommands = buildRemedialCommands(decision);
+  const selectedTargets = remedialCommands.map((command) => command.objectId);
 
   return {
     triggerId,
@@ -634,7 +636,8 @@ function buildRow(
       action: "open",
     },
     remedialCommands,
-    selectedTargets: remedialCommands.map((command) => command.objectId),
+    selectedTargets,
+    visualHints: buildVisualHints(triggerId, island, decision, remedialCommands),
     blockedReason: decision.status === "blocked" ? decision.operatorMessage : undefined,
     decision,
   };
@@ -679,8 +682,47 @@ function blockedRow(
     },
     remedialCommands: [],
     selectedTargets: [],
+    visualHints: emptyVisualHints(triggerId),
     blockedReason: reason,
     decision,
+  };
+}
+
+function emptyVisualHints(triggerId: string): TripMatrixRow["visualHints"] {
+  return {
+    highlightTriggerIds: [triggerId],
+    blinkArmedTargetIds: [],
+    runbackCandidateIds: [],
+    dimOutOfScopeIds: [],
+  };
+}
+
+function buildVisualHints(
+  triggerId: string,
+  island: ElectricalIsland | undefined,
+  decision: AdsDecision,
+  remedialCommands: TripMatrixRow["remedialCommands"],
+): TripMatrixRow["visualHints"] {
+  const blinkArmedTargetIds = decision.status === "armed"
+    ? remedialCommands.map((command) => command.objectId)
+    : [];
+
+  const isOgs = decision.actionType === "OGS_GENERATOR_SHEDDING" || decision.scenarioKind === "ogs_surplus";
+  const shouldShowRunbackCandidates =
+    isOgs &&
+    decision.status === "blocked" &&
+    remedialCommands.length === 0 &&
+    (decision.operatorMessage?.toLowerCase().includes("runback") ||
+      decision.operatorMessage?.toLowerCase().includes("no generator target") ||
+      decision.operatorMessage?.toLowerCase().includes("95-105") ||
+      decision.constraint?.toLowerCase().includes("overgeneration") ||
+      decision.constraint?.toLowerCase().includes("surplus"));
+
+  return {
+    highlightTriggerIds: [triggerId],
+    blinkArmedTargetIds,
+    runbackCandidateIds: shouldShowRunbackCandidates ? [...(island?.generatorIds ?? [])] : [],
+    dimOutOfScopeIds: [],
   };
 }
 
