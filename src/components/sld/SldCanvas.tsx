@@ -122,25 +122,81 @@ export function SldCanvas() {
   const substationPowerCards = useMemo(
     () =>
       [
-        { id: "A", name: "Substation A", x: 240, y: 420 },
-        { id: "B", name: "Substation B", x: 700, y: 29 },
+        { id: "A", name: "Substation A", x: 240, y: 400 },
+        { id: "B", name: "Substation B", x: 700, y: 25 },
         { id: "C", name: "Substation C", x: 1350, y: 400 },
       ].map((card) => {
         const islands = tripMatrix.topology.islands.filter((island) =>
           island.buses.includes(card.id as "A" | "B" | "C"),
+        );
+        const localGen = islands.reduce(
+          (sum, island) => sum + island.generationMw,
+          0,
+        );
+        const gridImport = islands.reduce(
+          (sum, island) => sum + island.gridImportMw,
+          0,
         );
         const source = islands.reduce(
           (sum, island) => sum + island.sourceMw,
           0,
         );
         const load = islands.reduce((sum, island) => sum + island.loadMw, 0);
-        const reserve = source - load;
+        const rawMargin = source - load;
+        const lowerLimit = load * 0.95;
+        const upperLimit = load * 1.05;
+        const balancePct =
+          load > 0 ? (source / load) * 100 : source > 0 ? Infinity : 100;
+        const hasGridSource = islands.some((island) => island.hasGridSource);
+        const isSplit = tripMatrix.topology.islands.length > 1;
+        const isPureIsland = isSplit && !hasGridSource;
+        const ogsRequired = isPureIsland && load > 0 && localGen > upperLimit;
+        const noLoadOgs = isPureIsland && load === 0 && localGen > 0;
+        const sheddingRequired = load > 0 && source < lowerLimit;
+        const watch = load > 0 && source < load && source >= lowerLimit;
+        const adsNeed = ogsRequired
+          ? Math.ceil(localGen - upperLimit)
+          : noLoadOgs
+            ? localGen
+            : sheddingRequired
+              ? Math.ceil(load - source / 0.95)
+              : 0;
+        const status = noLoadOgs
+          ? "ogs"
+          : ogsRequired
+            ? "ogs"
+            : sheddingRequired
+              ? "shedding"
+              : watch
+                ? "watch"
+                : "supported";
+        const statusLabel = noLoadOgs
+          ? "OGS · No load"
+          : ogsRequired
+            ? "OGS required"
+            : sheddingRequired
+              ? "Shedding required"
+              : watch
+                ? "Within tolerance"
+                : hasGridSource
+                  ? "Grid supported"
+                  : "Supported";
+
         return {
           ...card,
+          localGen,
+          gridImport,
           source,
           load,
-          reserve,
-          islanded: tripMatrix.topology.islands.length > 1,
+          rawMargin,
+          lowerLimit,
+          upperLimit,
+          balancePct,
+          adsNeed,
+          status,
+          statusLabel,
+          islanded: isSplit,
+          hasGridSource,
         };
       }),
     [tripMatrix],
@@ -617,26 +673,72 @@ export function SldCanvas() {
           >
             {substationPowerCards.map((card) => (
               <article
-                className={`substation-flow-card ${card.reserve < 0 ? "is-deficit" : "is-healthy"}`}
+                className={`substation-flow-card is-${card.status}`}
                 key={card.id}
                 style={{ left: card.x, top: card.y }}
               >
                 <header>
                   <span>{card.name}</span>
-                  <b>{card.islanded ? "Island" : "Grid"}</b>
+                  <b>{card.statusLabel}</b>
                 </header>
                 <div>
-                  <small>Gen</small>
+                  <small>Source</small>
                   <strong>{card.source} MW</strong>
                 </div>
                 <div>
                   <small>Load</small>
                   <strong>{card.load} MW</strong>
                 </div>
+                <div>
+                  <small>Balance</small>
+                  <strong>
+                    {Number.isFinite(card.balancePct)
+                      ? `${card.balancePct.toFixed(1)}%`
+                      : "∞"}
+                  </strong>
+                </div>
+                <div>
+                  <small>ADS Need</small>
+                  <strong>{card.adsNeed} MW</strong>
+                </div>
                 <footer>
-                  <small>{card.reserve >= 0 ? "Margin" : "Deficit"}</small>
-                  <strong>{Math.abs(card.reserve)} MW</strong>
+                  <small>
+                    {card.rawMargin >= 0 ? "Raw margin" : "Raw shortage"}
+                  </small>
+                  <strong>
+                    {card.rawMargin >= 0 ? "+" : ""}
+                    {card.rawMargin} MW
+                  </strong>
                 </footer>
+                <section className="substation-flow-tooltip">
+                  <strong>{card.name} balance reasoning</strong>
+                  <p>
+                    Local Gen {card.localGen} MW + IBT/Grid {card.gridImport} MW
+                    = Total Source {card.source} MW. Load {card.load} MW.
+                  </p>
+                  <p>
+                    Raw margin = {card.source} - {card.load} = {card.rawMargin}{" "}
+                    MW. Balance ={" "}
+                    {Number.isFinite(card.balancePct)
+                      ? `${card.balancePct.toFixed(1)}%`
+                      : "∞"}
+                    .
+                  </p>
+                  <p>
+                    ADS lower limit = 95% × {card.load} ={" "}
+                    {card.lowerLimit.toFixed(1)} MW. Upper limit = 105% ×{" "}
+                    {card.load} = {card.upperLimit.toFixed(1)} MW.
+                  </p>
+                  <p>
+                    {card.status === "watch"
+                      ? "Source is below load, but still inside the ADS 95% tolerance band. No load shedding is required."
+                      : card.status === "shedding"
+                        ? "Source is below the 95% lower limit. Local load shedding is required."
+                        : card.status === "ogs"
+                          ? "Pure island generation is above the 105% upper limit. OGS/runback is required if a valid generator target exists."
+                          : "Area is supported. No ADS action is required."}
+                  </p>
+                </section>
               </article>
             ))}
           </div>

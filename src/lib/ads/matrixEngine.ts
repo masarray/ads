@@ -1,5 +1,5 @@
 import { rankGenerationShedding, rankShedding } from "./solver";
-import { buildTopology, calculateIslands } from "./topology";
+import { buildTopology, calculateIslands, getSourceUnits } from "./topology";
 import type {
   AdsDecision,
   BreakerState,
@@ -52,12 +52,27 @@ export function simulateContingency(
     );
   }
 
+  const triggerState = snapshot.objectStates[triggerId] ?? "closed";
+  if (!isClosedState(triggerState)) {
+    return alreadyOpenRow(triggerId, snapshot, matrixVersion, rule);
+  }
+
+  const currentIslandId = currentTopology.deviceIslandMap[triggerId];
+  const currentIsland = currentIslandId
+    ? currentTopology.islands.find((island) => island.id === currentIslandId)
+    : undefined;
+
+  const currentOgsTargetDecision = currentIsland
+    ? evaluateCurrentIslandOgsTarget(triggerId, currentIsland, rule)
+    : null;
+  if (currentOgsTargetDecision && currentOgsTargetDecision.status !== "normal") {
+    return buildRow(triggerId, snapshot, matrixVersion, currentIsland, currentOgsTargetDecision);
+  }
+
   const nextSnapshot = withToggledState(snapshot, triggerId);
   const nextTopology = calculateIslands(nextSnapshot);
-  const currentIslandId = currentTopology.deviceIslandMap[triggerId];
   const affectedIsland = findAffectedIsland(rule, nextTopology, currentIslandId);
   const formsNewIsland = nextTopology.islands.length > currentTopology.islands.length;
-  const isTrueIsland = Boolean(affectedIsland && !affectedIsland.hasGridSource);
   const isSourceLossTrigger = isSourceLoss(triggerId);
   const mustEvaluateIslandBalance = Boolean(
     affectedIsland &&
@@ -143,6 +158,166 @@ export function simulateContingency(
   return buildRow(triggerId, snapshot, matrixVersion, affectedIsland, decision);
 }
 
+
+
+function isClosedState(state: BreakerState | undefined): boolean {
+  return state !== "open" && state !== "failed";
+}
+
+function alreadyOpenRow(
+  triggerId: string,
+  snapshot: SystemSnapshot,
+  matrixVersion: number,
+  rule: ContingencyRule,
+): TripMatrixRow {
+  const decision: AdsDecision = {
+    status: "normal",
+    requiredReliefMw: 0,
+    actionType: "NORMAL",
+    scenarioKind: rule.scenarioKind,
+    title: `${rule.title} - Already Open`,
+    mode: "TRIP MATRIX",
+    affectedBuses: rule.affectedBuses,
+    constraint: rule.constraint,
+    explanation:
+      "This contingency object is already open/tripped in the current snapshot. The matrix does not arm the same contingency again.",
+    detectedCondition: `${triggerId} is already open/tripped. No duplicate arming is generated.`,
+    operatorMessage:
+      "CB/contingency sudah open, jadi Trip Matrix tidak menampilkan arming ulang. Reclose dulu jika ingin membuat skenario baru.",
+    imbalanceBasis: "Open trigger objects are treated as already executed contingencies.",
+    imbalanceFormula: "ADS action need = 0 MW because duplicate arming is suppressed.",
+    alternatives: [],
+    rejected: [],
+  };
+
+  return {
+    triggerId,
+    matrixVersion,
+    snapshotHash: snapshot.snapshotHash,
+    status: "normal",
+    affectedBuses: rule.affectedBuses,
+    triggerCommand: {
+      objectId: triggerId,
+      action: "open",
+    },
+    remedialCommands: [],
+    selectedTargets: [],
+    decision,
+  };
+}
+
+function evaluateCurrentIslandOgsTarget(
+  triggerId: string,
+  island: ElectricalIsland,
+  rule: ContingencyRule,
+): AdsDecision | null {
+  if (!triggerId.startsWith("GEN_")) return null;
+  if (island.hasGridSource) return null;
+  if (!island.generatorIds.includes(triggerId)) return null;
+
+  const generationMw = island.generationMw;
+  const loadMw = island.loadMw;
+  if (generationMw <= 0) return null;
+
+  if (loadMw <= 0) {
+    return {
+      status: "armed",
+      requiredReliefMw: generationMw,
+      actionType: "OGS_GENERATOR_SHEDDING",
+      scenarioKind: "ogs_surplus",
+      title: `OGS - ${island.id} No Load Island`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: "Island has online generation but no closed load",
+      explanation:
+        "Current true island has generation with zero local load. OGS must trip local generators; no load shedding target is valid.",
+      detectedCondition: `Island ${island.id}: Pgen ${generationMw} MW, Pload 0 MW.`,
+      operatorMessage:
+        "OGS armed: island tanpa beban lokal. Generator lokal harus dilepas, bukan load remote.",
+      generationBeforeMw: generationMw,
+      loadBeforeMw: 0,
+      generationAfterMw: 0,
+      balanceRatioPct: 100,
+      imbalanceBasis: `Island ${island.id}: Pgen ${generationMw} MW, Pload 0 MW.`,
+      imbalanceFormula: `Required generation trip = ${generationMw} MW`,
+      selectedGeneration: {
+        id: island.generatorIds.join("+"),
+        name: `${island.generatorIds.join(" + ")} trip`,
+        bus: island.buses[0] ?? "C",
+        mw: generationMw,
+        priority: 1,
+        action: "trip",
+      },
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  const upperLimitMw = loadMw * 1.05;
+  if (generationMw <= upperLimitMw) return null;
+
+  const generator = getSourceUnits().find((source) => source.id === triggerId && source.kind === "generator");
+  if (!generator) {
+    return {
+      status: "blocked",
+      requiredReliefMw: Math.ceil(generationMw - upperLimitMw),
+      actionType: "OGS_GENERATOR_SHEDDING",
+      scenarioKind: "ogs_surplus",
+      title: `OGS - ${island.id} Generator Not Found`,
+      mode: "TRIP MATRIX",
+      affectedBuses: island.buses,
+      constraint: "Invalid OGS generator target",
+      explanation: "The hovered generator is not registered as a dispatchable OGS target.",
+      operatorMessage: "OGS blocked: generator target tidak ditemukan di source model.",
+      alternatives: [],
+      rejected: [],
+    };
+  }
+
+  const finalGenerationMw = generationMw - generator.mw;
+  const finalRatioPct = (finalGenerationMw / loadMw) * 100;
+  const requiredReductionMw = Math.ceil(generationMw - upperLimitMw);
+  const pass = finalRatioPct >= 95 && finalRatioPct <= 105;
+
+  return {
+    status: pass ? "armed" : "blocked",
+    requiredReliefMw: requiredReductionMw,
+    actionType: "OGS_GENERATOR_SHEDDING",
+    scenarioKind: "ogs_surplus",
+    title: pass
+      ? `OGS - Trip ${generator.name}`
+      : `OGS - ${generator.name} Runback Required`,
+    mode: "TRIP MATRIX",
+    affectedBuses: island.buses,
+    constraint: "True island overgeneration",
+    explanation:
+      "Current true island has generation above the 105% upper balance limit. The matrix checks whether tripping this local generator keeps the island inside 95-105%.",
+    detectedCondition:
+      `Island ${island.id}: Pgen ${generationMw} MW > 105% x Pload ${loadMw} MW (${upperLimitMw.toFixed(1)} MW).`,
+    operatorMessage: pass
+      ? `OGS armed: trip ${generator.name} keeps final balance at ${finalRatioPct.toFixed(1)}%.`
+      : `OGS required, but tripping ${generator.name} would make final balance ${finalRatioPct.toFixed(1)}%. Use generator runback instead of hard trip.`,
+    generationBeforeMw: generationMw,
+    loadBeforeMw: loadMw,
+    generationAfterMw: finalGenerationMw,
+    balanceRatioPct: finalRatioPct,
+    imbalanceBasis: `Island ${island.id}: Pgen ${generationMw} MW, Pload ${loadMw} MW.`,
+    imbalanceFormula:
+      `Required gen reduction >= ${requiredReductionMw} MW; trip ${generator.id} ${generator.mw} MW -> final Pgen ${finalGenerationMw} MW (${finalRatioPct.toFixed(1)}%).`,
+    selectedGeneration: pass
+      ? {
+          id: generator.id,
+          name: `${generator.name} trip`,
+          bus: generator.bus,
+          mw: generator.mw,
+          priority: 1,
+          action: "trip",
+        }
+      : undefined,
+    alternatives: [],
+    rejected: [],
+  };
+}
 
 function isSourceLoss(triggerId: string): boolean {
   return triggerId.startsWith("GEN_") || triggerId.startsWith("IBT_");
