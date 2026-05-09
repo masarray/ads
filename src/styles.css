@@ -918,11 +918,7 @@ button {
       rgba(125, 240, 226, 0.16),
       transparent 60%
     ),
-    linear-gradient(
-      180deg,
-      rgba(13, 25, 22, 0.92),
-      rgba(7, 17, 15, 0.9)
-    );
+    linear-gradient(180deg, rgba(13, 25, 22, 0.92), rgba(7, 17, 15, 0.9));
   backdrop-filter: blur(18px) saturate(145%);
   -webkit-backdrop-filter: blur(18px) saturate(145%);
   border: 1px solid rgba(125, 240, 226, 0.32);
@@ -1280,7 +1276,11 @@ button {
 .substation-flow-card {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  background: linear-gradient(180deg, rgba(13, 27, 24, 0.9), rgba(8, 18, 16, 0.88));
+  background: linear-gradient(
+    180deg,
+    rgba(13, 27, 24, 0.9),
+    rgba(8, 18, 16, 0.88)
+  );
   border: 1px solid rgba(125, 240, 226, 0.28);
   border-radius: 12px;
   box-shadow:
@@ -1456,7 +1456,6 @@ button {
   line-height: 1.45;
   margin: 0;
 }
-
 
 .sld-zoom-toolbar {
   align-items: center;
@@ -3256,3 +3255,129 @@ button {
   opacity: 0.72;
 }
 
+/* ============================================================
+   Phase 16 — About wording, operator guide modal, SEO support UI
+   ============================================================ */
+
+.help-button {
+  color: #f7d56b;
+}
+
+.help-button:hover {
+  border-color: rgba(247, 213, 107, 0.62);
+  box-shadow:
+    0 0 0 1px rgba(247, 213, 107, 0.12),
+    0 12px 28px -12px rgba(247, 213, 107, 0.72);
+  color: #fff0a6;
+}
+
+.help-question-mark {
+  align-items: center;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 950;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  transform: translateY(-0.5px);
+  width: 18px;
+}
+
+.about-disclaimer {
+  border-left: 3px solid rgba(247, 213, 107, 0.55);
+  color: rgba(243, 248, 245, 0.86);
+  padding-left: 10px;
+}
+
+.about-license {
+  color: var(--m3-primary);
+  font-weight: 800;
+}
+
+.help-floating-layer {
+  padding: 82px 18px 28px;
+}
+
+.help-floating-card {
+  max-height: min(760px, calc(100vh - 116px));
+  max-width: min(1040px, calc(100vw - 36px));
+  overflow: hidden;
+  width: min(980px, calc(100vw - 36px));
+}
+
+.help-card-header {
+  grid-template-columns: 48px 1fr auto;
+}
+
+.help-avatar {
+  background: radial-gradient(circle at 30% 30%, #fff7c2, #f1c453 50%, #c99121);
+  color: #221600;
+}
+
+.help-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: calc(100vh - 248px);
+  overflow: auto;
+  padding: 2px 4px 2px 0;
+  position: relative;
+}
+
+.help-section {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 110%),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(160, 210, 198, 0.18);
+  border-radius: 16px;
+  padding: 13px 14px;
+}
+
+.help-section--wide {
+  grid-column: 1 / -1;
+}
+
+.help-section h4 {
+  color: var(--m3-primary);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.07em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.help-section p {
+  color: rgba(243, 248, 245, 0.8);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.help-section p + p {
+  margin-top: 7px;
+}
+
+.help-footer {
+  background: rgba(125, 240, 226, 0.08);
+  border: 1px solid rgba(125, 240, 226, 0.22);
+  border-radius: 16px;
+  color: rgba(243, 248, 245, 0.84);
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 12px 14px;
+  position: relative;
+}
+
+.help-footer strong {
+  color: var(--m3-primary);
+}
+
+@media (max-width: 820px) {
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .help-floating-card {
+    width: calc(100vw - 26px);
+  }
+}

@@ -54,6 +54,7 @@ export function AppShell() {
   const [draftFrequencyHz, setDraftFrequencyHz] = useState(48.25);
   const [frequencyOpen, setFrequencyOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const aboutDragConstraintsRef = useRef<HTMLDivElement>(null);
   const aboutDragControls = useDragControls();
   const reset = useAdsStore((state) => state.reset);
@@ -116,6 +117,7 @@ export function AppShell() {
               onClick={() => {
                 setFrequencyOpen((open) => !open);
                 setAboutOpen(false);
+                setHelpOpen(false);
               }}
               type="button"
             >
@@ -224,11 +226,30 @@ export function AppShell() {
         <div className="topbar-right">
           <div className="about-control">
             <button
+              aria-label="Cara penggunaan app"
+              className="about-button help-button"
+              data-tooltip="Cara penggunaan app"
+              onClick={() => {
+                setHelpOpen((open) => !open);
+                setAboutOpen(false);
+                setFrequencyOpen(false);
+              }}
+              type="button"
+            >
+              <span className="help-question-mark" aria-hidden="true">
+                ?
+              </span>
+            </button>
+          </div>
+
+          <div className="about-control">
+            <button
               aria-label="About developer"
               className="about-button"
               data-tooltip="About developer"
               onClick={() => {
                 setAboutOpen((open) => !open);
+                setHelpOpen(false);
                 setFrequencyOpen(false);
               }}
               type="button"
@@ -301,21 +322,181 @@ export function AppShell() {
                 </header>
 
                 <p className="about-role">
-                  Substation Automation Engineer · Digital Substation Tools
+                  Substation Automation Engineer · Personal Defense Scheme Logic
+                  Exploration
                 </p>
 
                 <div className="about-chips">
-                  <span>ADS Logic</span>
-                  <span>IEC 61850</span>
-                  <span>Protection</span>
-                  <span>SCADA</span>
+                  <span>Power Flow Lite</span>
+                  <span>Trip Matrix</span>
+                  <span>ADS / OLS / OGS</span>
+                  <span>GPL-3.0</span>
                 </div>
 
                 <p className="about-copy">
-                  Smart ADS is a smart defense reasoning cockpit prototype for
-                  visualizing contingency impact, optimized load shedding, and
-                  minimum lost MW decisions.
+                  This application is a personal coding exploration of a smarter
+                  Defense Scheme reasoning concept based on topology awareness,
+                  fast Power Flow Lite calculation, source-load balance, island
+                  detection, and explainable trip-matrix logic.
                 </p>
+                <p className="about-copy">
+                  The purpose of this demo is to show how a defense scheme can
+                  make more reasoned decisions: understanding power direction,
+                  local source availability, grid/IBT support, island balance,
+                  and whether load shedding, generator runback, or no action is
+                  actually justified.
+                </p>
+                <p className="about-copy about-disclaimer">
+                  This is a personal demo and learning project. It is not a
+                  commercial product, not affiliated with any company, and not
+                  an official representation of any employer, utility, customer,
+                  or vendor system. It may be used by anyone to learn and teach
+                  smart defense scheme concepts based on fast power-flow load
+                  shedding reasoning.
+                </p>
+                <p className="about-copy about-license">
+                  Open-source GPL-3.0 personal exploration for better, more
+                  transparent, and more explainable power-system defense logic.
+                </p>
+              </motion.section>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {helpOpen ? (
+          <>
+            <motion.button
+              aria-label="Close app guide"
+              className="about-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setHelpOpen(false)}
+              type="button"
+            />
+            <motion.div
+              className="about-floating-layer help-floating-layer"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.3, 0, 0, 1] }}
+            >
+              <motion.section
+                aria-label="Cara penggunaan Adaptive Defense Scheme app"
+                className="about-floating-card help-floating-card"
+                initial={{ opacity: 0, scale: 0.9, y: 18 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.94, y: 10 }}
+                transition={{ duration: 0.24, ease: [0.3, 0, 0, 1] }}
+              >
+                <header className="about-card-header help-card-header">
+                  <span className="about-avatar help-avatar">?</span>
+                  <div>
+                    <small>Operator Guide</small>
+                    <h3>Cara Penggunaan App</h3>
+                  </div>
+                  <button
+                    aria-label="Close app guide"
+                    className="about-close"
+                    onClick={() => setHelpOpen(false)}
+                    type="button"
+                  >
+                    <X size={15} />
+                  </button>
+                </header>
+
+                <div className="help-grid">
+                  <section className="help-section help-section--wide">
+                    <h4>1. Cara membaca cockpit</h4>
+                    <p>
+                      SLD adalah area simulasi. Arahkan mouse ke CB, IBT, line,
+                      coupler, atau generator untuk melihat preview contingency
+                      dari Trip Matrix. Hover hanya preview; tidak mengubah
+                      kondisi sistem.
+                    </p>
+                    <p>
+                      Panel Power Flow menampilkan hasil Power Flow Lite: aliran
+                      MW, loading branch, dan kebutuhan pengurangan flow. Rail
+                      kanan menjelaskan keputusan Trip Matrix yang sedang
+                      di-hover atau kondisi live sistem.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>2. Simulasi OGS</h4>
+                    <p>
+                      Gunakan skenario island dengan pembangkitan lebih besar
+                      dari beban. App akan mengecek apakah CB generator trip
+                      bisa menjaga balance 95–105%. Jika tidak aman, app akan
+                      menyarankan generator runback, bukan hard trip.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>3. Simulasi OLS</h4>
+                    <p>
+                      Gunakan skenario overload IBT/line. Power Flow Lite
+                      membaca branch loading, kemudian Trip Matrix memilih
+                      target yang relevan terhadap constraint, bukan asal trip
+                      beban global.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>4. Frequency Injection</h4>
+                    <p>
+                      Klik tombol frekuensi di top bar, pilih nilai seperti
+                      48.25 Hz atau 50.00 Hz, lalu tekan Inject. App akan
+                      memperbarui kondisi sistem dan Trip Matrix berdasarkan
+                      zona frekuensi tersebut.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>5. Derate Generator</h4>
+                    <p>
+                      Derate berarti generator masih online, tetapi kemampuan MW
+                      turun. App menghitung ulang source, reserve, flow, dan
+                      apakah shedding atau action lain benar-benar diperlukan.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>6. Ubah setting prioritas dan MW</h4>
+                    <p>
+                      Masuk ke tab Settings untuk mengubah prioritas target,
+                      nilai MW load/generator, dan constraint simulasi. Setelah
+                      data berubah, Trip Matrix akan dibangun ulang dari kondisi
+                      terbaru.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>7. Event Log</h4>
+                    <p>
+                      Tab Event Log mencatat operasi, trip, reset, dan keputusan
+                      penting. Gunakan ini untuk audit urutan kejadian saat
+                      menganalisa skenario defense scheme.
+                    </p>
+                  </section>
+
+                  <section className="help-section">
+                    <h4>8. Trip Matrix</h4>
+                    <p>
+                      Tab Matrix adalah inti logika app. Setiap row menjawab:
+                      “kalau contingency ini terjadi, apa yang akan di-arming,
+                      kenapa dipilih, dan kenapa alternatif lain ditolak?”
+                    </p>
+                  </section>
+                </div>
+
+                <footer className="help-footer">
+                  <strong>Workflow singkat:</strong> Reset → hover contingency
+                  CB → baca rail kanan → cek Power Flow card → buka Matrix →
+                  ubah Settings bila perlu → review Event Log.
+                </footer>
               </motion.section>
             </motion.div>
           </>
