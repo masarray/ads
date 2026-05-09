@@ -5,6 +5,14 @@ import { buildTripMatrixForState, initialContingencyRules, isContingencyObject, 
 import { rankGenerationShedding, rankShedding } from "./solver";
 import type { AdsDecision, BreakerState, ContingencyRule, Feeder, LoadGroup, ScenarioKind, TripMatrix, TripMatrixRow } from "./model";
 
+type ScenarioRunState = {
+  active: boolean;
+  title: string;
+  step: number;
+  total: number;
+  message: string;
+};
+
 interface AdsStore {
   feeders: Feeder[];
   contingencyRules: Record<string, ContingencyRule>;
@@ -21,9 +29,12 @@ interface AdsStore {
   hoverObjectId: string | null;
   eventLog: string[];
   activeContingencyId: string | null;
+  scenarioRun: ScenarioRunState | null;
   reset: () => void;
   setRequiredReliefMw: (mw: number) => void;
   injectScenario: (kind: ScenarioKind, value?: number) => void;
+  runTimedScenario: (kind: ScenarioKind, value?: number) => void;
+  runBlackstartSequence: () => void;
   updateFeeder: (id: string, patch: Partial<Pick<Feeder, "mw" | "priority" | "group" | "shedEligible">>) => void;
   updateContingency: (id: string, patch: Partial<Pick<ContingencyRule, "requiredReliefMw" | "affectedBuses">>) => void;
   setReserveConfig: (patch: { sourceMw?: number; minReserveMw?: number }) => void;
@@ -43,6 +54,30 @@ const equipmentIds = [
   "GEN_C1",
   "GEN_C2"
 ];
+
+
+const sequenceDelayMs = 800;
+
+function wait(ms = sequenceDelayMs): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function scenarioTitle(kind: ScenarioKind): string {
+  switch (kind) {
+    case "topology_split":
+      return "Split Bus B Demo";
+    case "generation_derate":
+      return "Derate KIT C2 Demo";
+    case "frequency_islanding":
+      return "Frequency Injection Demo";
+    case "ols_overload":
+      return "OLS IBT C Demo";
+    case "ogs_surplus":
+      return "OGS Island Demo";
+    default:
+      return "ADS Timed Scenario";
+  }
+}
 
 const busCGeneratorMw: Record<string, number> = {
   GEN_C1: 165,
@@ -526,6 +561,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
   hoverObjectId: null,
   eventLog: [],
   activeContingencyId: null,
+  scenarioRun: null,
   reset: () => {
     const feeders = initialFeeders.map((feeder) => ({ ...feeder, breakerState: "closed" as BreakerState }));
     const objectStates = buildObjectStates(feeders);
@@ -543,7 +579,8 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       hoverDecision: null,
       hoverObjectId: null,
       eventLog: ["System reset. All controllable breakers closed."],
-      activeContingencyId: null
+      activeContingencyId: null,
+      scenarioRun: null
     });
   },
   setRequiredReliefMw: (requiredReliefMw) => {
@@ -574,6 +611,148 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
         ],
         explanation: "Operator memasukkan kebutuhan relief manual. ADS memilih kombinasi dengan overshed kecil, operasi CB sedikit, dan prioritas beban paling rendah."
       })
+    });
+  },
+  runTimedScenario: async (kind, value) => {
+    if (get().scenarioRun?.active) return;
+
+    const title = scenarioTitle(kind);
+    set({
+      scenarioRun: {
+        active: true,
+        title,
+        step: 0,
+        total: 2,
+        message: "Preparing timed scenario. This uses the same application command path as operator actions.",
+      },
+      eventLog: [`Scenario started: ${title}. Step timing ${sequenceDelayMs / 1000}s.`, ...get().eventLog].slice(0, 120),
+    });
+
+    await wait();
+
+    set({
+      scenarioRun: {
+        active: true,
+        title,
+        step: 1,
+        total: 2,
+        message:
+          kind === "topology_split"
+            ? "Operator action: open Bus B coupler."
+            : kind === "frequency_islanding"
+              ? `Parameter action: inject ${(value ?? 48.25).toFixed(2)} Hz.`
+              : "Scenario action: apply system event and rebuild Trip Matrix.",
+      },
+    });
+
+    if (kind === "topology_split") {
+      if (get().objectStates.LINE_COUPLER !== "open") get().toggleObject("LINE_COUPLER");
+    } else {
+      get().injectScenario(kind, value);
+    }
+
+    await wait();
+
+    set({
+      scenarioRun: {
+        active: false,
+        title,
+        step: 2,
+        total: 2,
+        message: "Scenario complete. Review Power Flow cards, Trip Matrix, and Event Log.",
+      },
+      eventLog: [`Scenario complete: ${title}.`, ...get().eventLog].slice(0, 120),
+    });
+  },
+  runBlackstartSequence: async () => {
+    if (get().scenarioRun?.active) return;
+
+    const title = "Blackstart Learning Sequence";
+    const blackstartSteps: Array<{ label: string; objectId?: string; message: string }> = [
+      { label: "Total blackout", message: "All controllable breakers opened. Buses should be de-energized before restoration." },
+      { label: "Start GEN A1", objectId: "GEN_A1", message: "Close the first blackstart-capable generator to energize Bus A." },
+      { label: "Pick up LOAD A5", objectId: "LOAD_A5", message: "Restore a small essential load first, not the full area load." },
+      { label: "Pick up LOAD A4", objectId: "LOAD_A4", message: "Add the next priority load and let PowerFlowLite validate the step." },
+      { label: "Synchronize GEN A2", objectId: "GEN_A2", message: "Bring a second local source online before expanding the island." },
+      { label: "Energize Line A-B", objectId: "LINE_AB", message: "Extend the energized path from Bus A toward Substation B." },
+      { label: "Close Bus B coupler", objectId: "LINE_COUPLER", message: "Tie Bus B sections after Bus B has a source path." },
+      { label: "Pick up LOAD B5", objectId: "LOAD_B5", message: "Restore B-area priority load gradually." },
+      { label: "Pick up LOAD B4", objectId: "LOAD_B4", message: "Continue staged load pickup and monitor branch loading." },
+      { label: "Start GEN C1", objectId: "GEN_C1", message: "Energize Substation C from a local generator before tying wider areas." },
+      { label: "Pick up LOAD C5", objectId: "LOAD_C5", message: "Restore a small C-area load while keeping source-load balance inside limits." },
+      { label: "Close Line A-C", objectId: "LINE_AC", message: "Tie Area C to the restored system after local source is available." },
+      { label: "Synchronize GEN C2", objectId: "GEN_C2", message: "Add generation margin for C-area restoration." },
+      { label: "Pick up LOAD C4", objectId: "LOAD_C4", message: "Restore additional C load." },
+      { label: "Restore IBT A", objectId: "IBT_A", message: "Return grid support on IBT A after the island is stable." },
+      { label: "Restore IBT C", objectId: "IBT_C", message: "Return grid support on IBT C and finish the learning sequence." },
+    ];
+
+    const openFeeders = get().feeders.map((feeder) => ({ ...feeder, breakerState: "open" as BreakerState }));
+    const openStates = buildObjectStates(openFeeders);
+    for (const id of equipmentIds) openStates[id] = "open";
+    for (const feeder of openFeeders) openStates[feeder.id] = "open";
+    const blackoutMatrix = buildMatrix(
+      openFeeders,
+      openStates,
+      get().contingencyRules,
+      get().sourceMw,
+      get().minReserveMw,
+      get().frequencyHz,
+    );
+
+    set({
+      feeders: openFeeders,
+      objectStates: openStates,
+      ...matrixState(blackoutMatrix),
+      decision: blackoutMatrix.baseDecision,
+      hoverDecision: null,
+      hoverObjectId: null,
+      activeContingencyId: null,
+      scenarioRun: {
+        active: true,
+        title,
+        step: 0,
+        total: blackstartSteps.length - 1,
+        message: blackstartSteps[0].message,
+      },
+      eventLog: [
+        "Blackstart: total blackout applied. All controllable breakers opened.",
+        ...get().eventLog,
+      ].slice(0, 120),
+    });
+
+    await wait();
+
+    for (let index = 1; index < blackstartSteps.length; index += 1) {
+      const step = blackstartSteps[index];
+      set({
+        scenarioRun: {
+          active: true,
+          title,
+          step: index,
+          total: blackstartSteps.length - 1,
+          message: `${step.label}: ${step.message}`,
+        },
+        eventLog: [`Blackstart step ${index}: ${step.label}.`, ...get().eventLog].slice(0, 120),
+      });
+
+      if (step.objectId) {
+        const state = get().objectStates[step.objectId];
+        if (state === "open" || state === "failed") get().toggleObject(step.objectId);
+      }
+
+      await wait();
+    }
+
+    set({
+      scenarioRun: {
+        active: false,
+        title,
+        step: blackstartSteps.length - 1,
+        total: blackstartSteps.length - 1,
+        message: "Blackstart sequence complete. Review SLD energization, Power Flow cards, Trip Matrix, and Event Log.",
+      },
+      eventLog: ["Blackstart sequence complete.", ...get().eventLog].slice(0, 120),
     });
   },
   injectScenario: (kind, value) => {

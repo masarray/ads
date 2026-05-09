@@ -7,6 +7,7 @@ import {
   GitBranch,
   Grid3X3,
   ListChecks,
+  Power,
   RotateCcw,
   Settings,
   GitFork,
@@ -59,7 +60,9 @@ export function AppShell() {
   const aboutDragControls = useDragControls();
   const reset = useAdsStore((state) => state.reset);
   const frequencyHz = useAdsStore((state) => state.frequencyHz);
-  const injectScenario = useAdsStore((state) => state.injectScenario);
+  const runTimedScenario = useAdsStore((state) => state.runTimedScenario);
+  const runBlackstartSequence = useAdsStore((state) => state.runBlackstartSequence);
+  const scenarioRun = useAdsStore((state) => state.scenarioRun);
 
   return (
     <main className="app-shell">
@@ -78,6 +81,15 @@ export function AppShell() {
           <button className="command-button" onClick={reset} type="button">
             <RotateCcw size={16} />
             Reset
+          </button>
+          <button
+            className="command-button blackstart-command"
+            disabled={scenarioRun?.active}
+            onClick={runBlackstartSequence}
+            type="button"
+          >
+            <Power size={16} />
+            Blackstart
           </button>
 
           <span className="topbar-separator" aria-hidden="true" />
@@ -177,7 +189,7 @@ export function AppShell() {
                   <button
                     className="freq-inject"
                     onClick={() => {
-                      injectScenario("frequency_islanding", draftFrequencyHz);
+                      runTimedScenario("frequency_islanding", draftFrequencyHz);
                       setFrequencyOpen(false);
                     }}
                     type="button"
@@ -191,7 +203,7 @@ export function AppShell() {
 
           <button
             className="command-button"
-            onClick={() => injectScenario("topology_split")}
+            onClick={() => runTimedScenario("topology_split")}
             type="button"
           >
             <GitBranch size={16} />
@@ -199,7 +211,7 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
-            onClick={() => injectScenario("generation_derate")}
+            onClick={() => runTimedScenario("generation_derate")}
             type="button"
           >
             <Zap size={16} />
@@ -207,7 +219,7 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
-            onClick={() => injectScenario("ols_overload")}
+            onClick={() => runTimedScenario("ols_overload")}
             type="button"
           >
             <AlertTriangle size={16} />
@@ -215,7 +227,7 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
-            onClick={() => injectScenario("ogs_surplus")}
+            onClick={() => runTimedScenario("ogs_surplus")}
             type="button"
           >
             <Gauge size={16} />
