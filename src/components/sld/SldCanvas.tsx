@@ -73,6 +73,73 @@ const sldNativeHeight = sldViewBox.height;
 const minZoom = 0.45;
 const maxZoom = 1.35;
 
+type AreaCardId = "A" | "B" | "C";
+
+const areaCardBusMap: Record<AreaCardId, string[]> = {
+  A: ["A"],
+  B: ["B1", "B2"],
+  C: ["C"],
+};
+
+const areaCardPositions: Array<{
+  id: AreaCardId;
+  name: string;
+  x: number;
+  y: number;
+}> = [
+  // Keep the cards small and parked near the edge of each electrical area.
+  // The SLD conductors/breakers remain the primary visual layer.
+  { id: "A", name: "Substation A", x: 320, y: 420 },
+  { id: "B", name: "Substation B", x: 690, y: 32 },
+  { id: "C", name: "Substation C", x: 1358, y: 420 },
+];
+
+const localGenerationByArea: Record<
+  AreaCardId,
+  Array<{ id: string; mw: number }>
+> = {
+  A: [
+    { id: "GEN_A1", mw: 180 },
+    { id: "GEN_A2", mw: 135 },
+  ],
+  B: [],
+  C: [
+    { id: "GEN_C1", mw: 165 },
+    { id: "GEN_C2", mw: 145 },
+  ],
+};
+
+const ibtBranchByArea: Partial<Record<AreaCardId, string>> = {
+  A: "IBT_A",
+  C: "IBT_C",
+};
+
+const branchLabelMap: Record<string, string> = {
+  IBT_A: "IBT A",
+  LINE_AB: "Line A-B",
+  LINE_COUPLER: "Bus Coupler B",
+  LINE_BC: "Line B-C",
+  LINE_AC: "Line A-C",
+  IBT_C: "IBT C",
+};
+
+function formatMw(value: number): string {
+  if (!Number.isFinite(value)) return "∞";
+  const rounded = Math.abs(value) < 0.05 ? 0 : Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function formatPct(value: number): string {
+  if (!Number.isFinite(value)) return "∞";
+  return `${Math.round(value * 10) / 10}`;
+}
+
+function signedMw(value: number): string {
+  const formatted = formatMw(value);
+  if (formatted === "0") return "0";
+  return value > 0 ? `+${formatted}` : formatted;
+}
+
 export function SldCanvas() {
   const stageRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -120,47 +187,156 @@ export function SldCanvas() {
   const displayDemandMw = displayDecision.loadBeforeMw ?? demandMw;
   const reserveMw = Math.max(0, displaySourceMw - displayDemandMw);
   const isOgsView = displayDecision.actionType === "OGS_GENERATOR_SHEDDING";
+  // Preview overlay is intentionally hover-only.
+  // PowerFlowLite/base live constraints are shown in cards/rail, but they must not
+  // create SLD arming glow by themselves. This keeps hover preview and live
+  // diagnostic separated.
+  const previewMatrixRow = useMemo(() => {
+    if (!hoverObjectId) return undefined;
+    const row = tripMatrix.rows[hoverObjectId];
+    return row?.snapshotHash === tripMatrix.snapshotHash ? row : undefined;
+  }, [hoverObjectId, tripMatrix]);
+
+  const activeMatrixRow = previewMatrixRow;
+
+  const currentPowerFlow = tripMatrix.powerFlow;
+  // Cards may show the hovered contingency's post-contingency power-flow snapshot,
+  // but only while there is an actual hover preview row. Otherwise they show the
+  // current live PowerFlowLite snapshot.
+  const previewPowerFlow = previewMatrixRow?.powerFlow ?? currentPowerFlow;
+  const branchFlowById = useMemo(
+    () =>
+      new Map(
+        (currentPowerFlow?.branches ?? []).map((branch) => [
+          branch.branchId,
+          branch,
+        ]),
+      ),
+    [currentPowerFlow],
+  );
+  const previewBranchFlowById = useMemo(
+    () =>
+      new Map(
+        (previewPowerFlow?.branches ?? []).map((branch) => [
+          branch.branchId,
+          branch,
+        ]),
+      ),
+    [previewPowerFlow],
+  );
+
+  const activeFlowBranch = useMemo(() => {
+    if (hoverObjectId && previewBranchFlowById.has(hoverObjectId)) {
+      return previewBranchFlowById.get(hoverObjectId);
+    }
+    if (activeMatrixRow?.activeFlowConstraint)
+      return activeMatrixRow.activeFlowConstraint;
+    const worstPreview = previewPowerFlow?.overloadedBranches?.[0];
+    if (worstPreview) return worstPreview;
+    return [...(previewPowerFlow?.branches ?? [])]
+      .filter((branch) => branch.status === "closed")
+      .sort((left, right) => right.loadingPct - left.loadingPct)[0];
+  }, [activeMatrixRow, hoverObjectId, previewBranchFlowById, previewPowerFlow]);
+
+  const topBranchFlows = useMemo(
+    () =>
+      [...(previewPowerFlow?.branches ?? [])]
+        .filter((branch) => branch.status === "closed")
+        .sort((left, right) => right.loadingPct - left.loadingPct)
+        .slice(0, 4),
+    [previewPowerFlow],
+  );
+
   const substationPowerCards = useMemo(
     () =>
-      [
-        { id: "A", name: "Substation A", x: 260, y: 390 },
-        { id: "B", name: "Substation B", x: 700, y: 27 },
-        { id: "C", name: "Substation C", x: 1350, y: 390 },
-      ].map((card) => {
-        const islands = tripMatrix.topology.islands.filter((island) =>
-          island.buses.includes(card.id as "A" | "B" | "C"),
+      areaCardPositions.map((card) => {
+        const nodeSet = new Set(areaCardBusMap[card.id]);
+        const localGen = localGenerationByArea[card.id]
+          .filter(
+            (source) =>
+              objectStates[source.id] !== "open" &&
+              objectStates[source.id] !== "failed",
+          )
+          .reduce((sum, source) => sum + source.mw, 0);
+        const load = feeders
+          .filter((feeder) => feeder.breakerState === "closed")
+          .filter((feeder) => {
+            if (card.id === "A") return feeder.bus === "A";
+            if (card.id === "C") return feeder.bus === "C";
+            return feeder.bus === "B";
+          })
+          .reduce((sum, feeder) => sum + feeder.mw, 0);
+        const isSplit = tripMatrix.topology.islands.length > 1;
+        const branchFlows = previewPowerFlow?.branches ?? [];
+        const ibtId = ibtBranchByArea[card.id];
+        const ibtBranch = ibtId
+          ? branchFlows.find((branch) => branch.branchId === ibtId)
+          : undefined;
+        let ibtFlow = 0;
+        if (ibtBranch && ibtBranch.status === "closed") {
+          // Branch template direction is GRID_A -> A and GRID_C -> C.
+          // Positive flow therefore means import into the substation.
+          ibtFlow = ibtBranch.flowMw;
+        }
+
+        let tieImport = 0;
+        let tieExport = 0;
+        const tieDetails: string[] = [];
+
+        for (const branch of branchFlows) {
+          if (branch.status !== "closed") continue;
+          if (branch.branchId.startsWith("IBT_")) continue;
+          const fromInside = nodeSet.has(branch.fromBus);
+          const toInside = nodeSet.has(branch.toBus);
+          if (fromInside === toInside) continue;
+
+          const importIntoArea = toInside ? branch.flowMw : -branch.flowMw;
+          if (importIntoArea >= 0) tieImport += importIntoArea;
+          else tieExport += Math.abs(importIntoArea);
+          tieDetails.push(
+            `${branchLabelMap[branch.branchId] ?? branch.branchId}: ${signedMw(importIntoArea)} MW`,
+          );
+        }
+
+        const hasGridSource = Boolean(
+          ibtBranch && ibtBranch.status === "closed" && ibtFlow > 0,
         );
-        const localGen = islands.reduce(
-          (sum, island) => sum + island.generationMw,
-          0,
-        );
-        const gridImport = islands.reduce(
-          (sum, island) => sum + island.gridImportMw,
-          0,
-        );
-        const source = islands.reduce(
-          (sum, island) => sum + island.sourceMw,
-          0,
-        );
-        const load = islands.reduce((sum, island) => sum + island.loadMw, 0);
-        const rawMargin = source - load;
+        const totalInflow = localGen + Math.max(0, ibtFlow) + tieImport;
+        const servedByFlow = totalInflow - tieExport;
+        const pfBalance = servedByFlow - load;
+        const sourceForAds = localGen + Math.max(0, ibtFlow) + tieImport;
         const lowerLimit = load * 0.95;
         const upperLimit = load * 1.05;
-        const balancePct =
-          load > 0 ? (source / load) * 100 : source > 0 ? Infinity : 100;
-        const hasGridSource = islands.some((island) => island.hasGridSource);
-        const isSplit = tripMatrix.topology.islands.length > 1;
-        const isPureIsland = isSplit && !hasGridSource;
+        const adsBalancePct =
+          load > 0
+            ? (sourceForAds / load) * 100
+            : sourceForAds > 0
+              ? Infinity
+              : 100;
+        const isPureIsland = isSplit && !hasGridSource && tieImport <= 0;
         const ogsRequired = isPureIsland && load > 0 && localGen > upperLimit;
         const noLoadOgs = isPureIsland && load === 0 && localGen > 0;
-        const sheddingRequired = load > 0 && source < lowerLimit;
-        const watch = load > 0 && source < load && source >= lowerLimit;
+
+        // Important power-system rule:
+        // a local substation card is diagnostic only. It must not declare
+        // load shedding just because local generation is below local load
+        // while the area is still interconnected or grid/tie supported.
+        const sheddingRequired =
+          isPureIsland && load > 0 && sourceForAds < lowerLimit;
+        const withinTolerance =
+          load > 0 && sourceForAds < load && sourceForAds >= lowerLimit;
+        const importing =
+          !isPureIsland &&
+          load > 0 &&
+          (hasGridSource || tieImport > 0 || sourceForAds >= lowerLimit);
+        const watch =
+          withinTolerance || (!isPureIsland && Math.abs(pfBalance) > 0.05);
         const adsNeed = ogsRequired
           ? Math.ceil(localGen - upperLimit)
           : noLoadOgs
             ? localGen
             : sheddingRequired
-              ? Math.ceil(load - source / 0.95)
+              ? Math.ceil(load - sourceForAds / 0.95)
               : 0;
         const status = noLoadOgs
           ? "ogs"
@@ -168,45 +344,50 @@ export function SldCanvas() {
             ? "ogs"
             : sheddingRequired
               ? "shedding"
-              : watch
-                ? "watch"
-                : "supported";
+              : importing
+                ? "importing"
+                : watch
+                  ? "watch"
+                  : "supported";
         const statusLabel = noLoadOgs
           ? "OGS · No load"
           : ogsRequired
             ? "OGS required"
             : sheddingRequired
-              ? "Shedding required"
-              : watch
-                ? "Within tolerance"
-                : hasGridSource
-                  ? "Grid supported"
-                  : "Supported";
+              ? "Island deficit"
+              : importing
+                ? "Import supported"
+                : withinTolerance
+                  ? "Within tolerance"
+                  : hasGridSource
+                    ? "Grid supported"
+                    : "PF balanced";
 
         return {
           ...card,
           localGen,
-          gridImport,
-          source,
+          availableGridImport: Math.max(0, ibtFlow),
+          ibtFlow,
+          tieImport,
+          tieExport,
           load,
-          rawMargin,
+          totalInflow,
+          servedByFlow,
+          pfBalance,
+          sourceForAds,
           lowerLimit,
           upperLimit,
-          balancePct,
+          adsBalancePct,
           adsNeed,
           status,
           statusLabel,
           islanded: isSplit,
           hasGridSource,
+          tieDetails,
         };
       }),
-    [tripMatrix],
+    [feeders, objectStates, previewPowerFlow, tripMatrix],
   );
-  const activeMatrixRow = useMemo(() => {
-    if (!hoverObjectId) return undefined;
-    const row = tripMatrix.rows[hoverObjectId];
-    return row?.snapshotHash === tripMatrix.snapshotHash ? row : undefined;
-  }, [hoverObjectId, tripMatrix]);
 
   const armedTargetIds = useMemo(() => {
     const ids = new Set<string>();
@@ -219,16 +400,8 @@ export function SldCanvas() {
       if (activeMatrixRow?.status === "armed") ids.add(command.objectId);
     }
 
-    const shownDecision = hoverDecision ?? decision;
-    for (const feeder of shownDecision.selected?.feeders ?? []) {
-      ids.add(feeder.id);
-    }
-    for (const id of shownDecision.selectedGeneration?.id.split("+") ?? []) {
-      if (id) ids.add(id);
-    }
-
     return ids;
-  }, [activeMatrixRow, decision, hoverDecision]);
+  }, [activeMatrixRow]);
 
   const runbackTargetIds = useMemo(
     () => new Set(activeMatrixRow?.visualHints?.runbackCandidateIds ?? []),
@@ -559,10 +732,12 @@ export function SldCanvas() {
     for (const [objectId, state] of Object.entries(objectStates)) {
       setState(objectId, state === "closed");
       if (objectMwText[objectId]) {
+        const branchFlow = branchFlowById.get(objectId);
         const useRuleRelief =
           objectId.startsWith("LINE_") || objectId.startsWith("IBT_");
         const configuredMw = useRuleRelief
-          ? contingencyRules[objectId]?.requiredReliefMw
+          ? (branchFlow?.absFlowMw ??
+            contingencyRules[objectId]?.requiredReliefMw)
           : undefined;
         setText(
           `MW_${objectId}`,
@@ -586,6 +761,11 @@ export function SldCanvas() {
       );
     }
 
+    for (const objectId of activeMatrixRow?.visualHints?.highlightTriggerIds ??
+      []) {
+      applyVisualHint(objectId, ["svg-trigger-preview"]);
+    }
+
     for (const objectId of armedTargetIds) {
       applyVisualHint(objectId, ["svg-armed", "svg-selected"]);
     }
@@ -594,6 +774,8 @@ export function SldCanvas() {
       applyVisualHint(objectId, ["svg-runback"]);
     }
   }, [
+    activeMatrixRow,
+    branchFlowById,
     contingencyRules,
     decision,
     displayDecision,
@@ -644,44 +826,87 @@ export function SldCanvas() {
         <div className="power-flow-metrics">
           <div>
             <Activity size={14} />
-            <span>{isOgsView ? "Island Gen" : "Source"}</span>
-            <strong>{displaySourceMw} MW</strong>
+            <span>Branch</span>
+            <strong>
+              {activeFlowBranch
+                ? (branchLabelMap[activeFlowBranch.branchId] ??
+                  activeFlowBranch.branchId)
+                : "N/A"}
+            </strong>
           </div>
           <div>
             <SlidersHorizontal size={14} />
-            <span>{isOgsView ? "Island Load" : "Demand"}</span>
-            <strong>{displayDemandMw} MW</strong>
+            <span>Flow</span>
+            <strong>
+              {activeFlowBranch
+                ? `${formatMw(activeFlowBranch.absFlowMw)} MW`
+                : "0 MW"}
+            </strong>
           </div>
           <div>
             <Zap size={14} />
-            <span>Reserve</span>
-            <strong>{reserveMw} MW</strong>
+            <span>Loading</span>
+            <strong>
+              {activeFlowBranch
+                ? `${formatPct(activeFlowBranch.loadingPct)}%`
+                : "0%"}
+            </strong>
           </div>
           <div>
             <Gauge size={14} />
-            <span>{isOgsView ? "Gen Trip Need" : "Action Need"}</span>
-            <strong>{displayNeedMw} MW</strong>
+            <span>
+              {activeFlowBranch?.isOverloaded ? "ADS Need" : "To 85%"}
+            </span>
+            <strong>
+              {activeFlowBranch
+                ? `${formatMw(activeFlowBranch.isOverloaded ? activeFlowBranch.requiredReductionMw : Math.max(0, activeFlowBranch.requiredReductionMw))} MW`
+                : "0 MW"}
+            </strong>
           </div>
         </div>
 
         <div className="power-flow-story">
-          <small>Why action is needed</small>
+          <small>Power Flow Lite source of truth</small>
           <p>
-            {displayDecision.imbalanceBasis ??
-              (isOgsView
-                ? "Island generation dibandingkan dengan island load."
-                : "Source memasok demand yang masih closed.")}
+            {activeFlowBranch
+              ? activeFlowBranch.isOverloaded
+                ? `${branchLabelMap[activeFlowBranch.branchId] ?? activeFlowBranch.branchId} exceeds the ADS pickup. Direction ${activeFlowBranch.directionLabel}. Rating ${formatMw(activeFlowBranch.ratingMw)} MW, target <= ${formatMw(activeFlowBranch.targetMaxMw)} MW.`
+                : `${branchLabelMap[activeFlowBranch.branchId] ?? activeFlowBranch.branchId} is below ADS pickup. It may be above the preferred 85% band, but no ADS trip is required yet.`
+              : "No active branch flow is available from Power Flow Lite."}
           </p>
         </div>
 
         <div className="power-flow-equation">
-          <span>Calculation</span>
+          <span>Constraint formula</span>
           <b>
-            {displayDecision.imbalanceFormula ??
-              `${isOgsView ? "Island Gen - Load" : "Source - Demand"} = ${reserveMw} MW`}
+            {activeFlowBranch
+              ? activeFlowBranch.isOverloaded
+                ? `ADS Need = |${formatMw(activeFlowBranch.flowMw)}| - 85%×${formatMw(activeFlowBranch.ratingMw)} = ${formatMw(activeFlowBranch.requiredReductionMw)} MW`
+                : `ADS Need = 0 MW · preferred-band reduction ${formatMw(Math.max(0, activeFlowBranch.requiredReductionMw))} MW`
+              : "No active constraint"}
           </b>
-          <span>ADS action</span>
-          <b>{displayNeedMw} MW</b>
+          <span>ADS row</span>
+          <b>
+            {activeMatrixRow
+              ? `${activeMatrixRow.status.toUpperCase()} · ${activeMatrixRow.decision.title ?? activeMatrixRow.triggerId}`
+              : "Current PF snapshot"}
+          </b>
+        </div>
+
+        <div
+          className="branch-flow-list"
+          aria-label="Top branch loading from Power Flow Lite"
+        >
+          {topBranchFlows.map((branch) => (
+            <div
+              className={branch.isOverloaded ? "is-overload" : ""}
+              key={branch.branchId}
+            >
+              <span>{branchLabelMap[branch.branchId] ?? branch.branchId}</span>
+              <b>{formatMw(branch.absFlowMw)} MW</b>
+              <small>{formatPct(branch.loadingPct)}%</small>
+            </div>
+          ))}
         </div>
       </motion.aside>
       <div className="sld-zoom-toolbar" aria-label="SLD zoom controls">
@@ -734,65 +959,75 @@ export function SldCanvas() {
                 style={{ left: card.x, top: card.y }}
               >
                 <header>
-                  <span>{card.name}</span>
+                  <span>{card.name.replace("Substation", "S/S")}</span>
                   <b>{card.statusLabel}</b>
                 </header>
-                <div>
-                  <small>Source</small>
-                  <strong>{card.source} MW</strong>
+                <div className="substation-flow-card__metric">
+                  <small>Src</small>
+                  <strong>{formatMw(card.sourceForAds)} MW</strong>
                 </div>
-                <div>
+                <div className="substation-flow-card__metric">
                   <small>Load</small>
-                  <strong>{card.load} MW</strong>
+                  <strong>{formatMw(card.load)} MW</strong>
                 </div>
-                <div>
-                  <small>Balance</small>
+                <div className="substation-flow-card__metric">
+                  <small>Bal</small>
                   <strong>
-                    {Number.isFinite(card.balancePct)
-                      ? `${card.balancePct.toFixed(1)}%`
+                    {Number.isFinite(card.adsBalancePct)
+                      ? `${formatPct(card.adsBalancePct)}%`
                       : "∞"}
                   </strong>
                 </div>
-                <div>
-                  <small>ADS Need</small>
-                  <strong>{card.adsNeed} MW</strong>
+                <div className="substation-flow-card__metric">
+                  <small>Need</small>
+                  <strong>{formatMw(card.adsNeed)} MW</strong>
                 </div>
                 <footer>
-                  <small>
-                    {card.rawMargin >= 0 ? "Raw margin" : "Raw shortage"}
-                  </small>
-                  <strong>
-                    {card.rawMargin >= 0 ? "+" : ""}
-                    {card.rawMargin} MW
-                  </strong>
+                  <span>PF {signedMw(card.pfBalance)} MW</span>
+                  <span>
+                    {card.hasGridSource
+                      ? `IBT ${signedMw(card.ibtFlow)}`
+                      : `Tie ${signedMw(card.tieImport - card.tieExport)}`}
+                  </span>
                 </footer>
                 <section className="substation-flow-tooltip">
-                  <strong>{card.name} balance reasoning</strong>
+                  <strong>{card.name} Power Flow Lite reasoning</strong>
                   <p>
-                    Local Gen {card.localGen} MW + IBT/Grid {card.gridImport} MW
-                    = Total Source {card.source} MW. Load {card.load} MW.
+                    Local Gen {formatMw(card.localGen)} MW, IBT/Grid flow{" "}
+                    {signedMw(card.ibtFlow)} MW, tie import{" "}
+                    {formatMw(card.tieImport)} MW, tie export{" "}
+                    {formatMw(card.tieExport)} MW, load {formatMw(card.load)}{" "}
+                    MW.
                   </p>
                   <p>
-                    Raw margin = {card.source} - {card.load} = {card.rawMargin}{" "}
-                    MW. Balance ={" "}
-                    {Number.isFinite(card.balancePct)
-                      ? `${card.balancePct.toFixed(1)}%`
+                    PF balance = Gen + IBT + Tie import - Tie export - Load ={" "}
+                    {signedMw(card.pfBalance)} MW. This card follows the current
+                    PowerFlowLite branch-flow result, not static relief MW.
+                  </p>
+                  <p>
+                    ADS source basis = Gen + positive IBT import + tie import ={" "}
+                    {formatMw(card.sourceForAds)} MW. ADS balance ={" "}
+                    {Number.isFinite(card.adsBalancePct)
+                      ? `${formatPct(card.adsBalancePct)}%`
                       : "∞"}
                     .
                   </p>
                   <p>
-                    ADS lower limit = 95% × {card.load} ={" "}
-                    {card.lowerLimit.toFixed(1)} MW. Upper limit = 105% ×{" "}
-                    {card.load} = {card.upperLimit.toFixed(1)} MW.
+                    ADS lower limit = 95% × {formatMw(card.load)} ={" "}
+                    {formatMw(card.lowerLimit)} MW. Upper limit = 105% ×{" "}
+                    {formatMw(card.load)} = {formatMw(card.upperLimit)} MW.
                   </p>
+                  {card.tieDetails.length ? (
+                    <p>Interchange: {card.tieDetails.join(" · ")}</p>
+                  ) : null}
                   <p>
                     {card.status === "watch"
-                      ? "Source is below load, but still inside the ADS 95% tolerance band. No load shedding is required."
+                      ? "PowerFlowLite shows a small shortage, but ADS source is still inside the 95% tolerance band. No load shedding is required."
                       : card.status === "shedding"
-                        ? "Source is below the 95% lower limit. Local load shedding is required."
+                        ? "This is a true island deficit: ADS source is below the 95% lower limit. Local load shedding is required only for this island scope."
                         : card.status === "ogs"
                           ? "Pure island generation is above the 105% upper limit. OGS/runback is required if a valid generator target exists."
-                          : "Area is supported. No ADS action is required."}
+                          : "PowerFlowLite and ADS balance show supported operation. No ADS action is required."}
                   </p>
                 </section>
               </article>

@@ -1,7 +1,9 @@
 import { rankGenerationShedding, rankShedding } from "./solver";
 import { buildTopology, calculateIslands, getSourceUnits } from "./topology";
+import { getWorstOverload, solvePowerFlowLite } from "./powerFlowLite";
 import type {
   AdsDecision,
+  BranchFlowResult,
   BreakerState,
   ContingencyRule,
   ElectricalIsland,
@@ -10,27 +12,40 @@ import type {
   TopologyModel,
   TripMatrix,
   TripMatrixRow,
+  PowerFlowLiteResult,
 } from "./model";
 
 let matrixSequence = 0;
 
 export function buildTripMatrix(snapshot: SystemSnapshot): TripMatrix {
   const topology = buildTopology(snapshot);
+  const powerFlow = solvePowerFlowLite(snapshot);
   const matrixVersion = matrixSequence + 1;
   matrixSequence = matrixVersion;
 
-  const rows = Object.fromEntries(
+  const rows: Record<string, TripMatrixRow> = Object.fromEntries(
     Object.keys(snapshot.contingencyRules).map((triggerId) => {
       const row = simulateContingency(triggerId, snapshot, topology, matrixVersion);
       return [triggerId, row];
     }),
   );
 
+  const activeFlowConstraint = getWorstOverload(powerFlow);
+  const activeRow = activeFlowConstraint
+    ? buildActiveFlowConstraintRow(activeFlowConstraint, snapshot, topology, matrixVersion, powerFlow)
+    : undefined;
+
+  if (activeRow) rows[activeRow.triggerId] = activeRow;
+
   return {
     matrixVersion,
     snapshotHash: snapshot.snapshotHash,
     rows,
     topology,
+    powerFlow,
+    baseDecision: activeRow?.decision ?? buildNormalBaseDecision(snapshot, powerFlow),
+    activeRowId: activeRow?.triggerId,
+    activeFlowConstraint,
   };
 }
 
@@ -71,6 +86,7 @@ export function simulateContingency(
 
   const nextSnapshot = withToggledState(snapshot, triggerId);
   const nextTopology = calculateIslands(nextSnapshot);
+  const nextPowerFlow = solvePowerFlowLite(nextSnapshot);
   const affectedIsland = findAffectedIsland(rule, nextTopology, currentIslandId);
   const formsNewIsland = nextTopology.islands.length > currentTopology.islands.length;
   const isSourceLossTrigger = isSourceLoss(triggerId);
@@ -107,7 +123,13 @@ export function simulateContingency(
 
   if (formsNewIsland && affectedIsland.hasGridSource && affectedIsland.reserveMw >= 0) {
     const supportedDecision = buildGridSupportedNoActionDecision(triggerId, affectedIsland, rule);
-    return buildRow(triggerId, nextSnapshot, matrixVersion, affectedIsland, supportedDecision);
+    return buildRow(triggerId, nextSnapshot, matrixVersion, affectedIsland, supportedDecision, nextPowerFlow);
+  }
+
+  const activeFlowConstraint = getWorstOverload(nextPowerFlow, { excludeBranchId: triggerId });
+  if (activeFlowConstraint && affectedIsland) {
+    const flowDecision = evaluateFlowConstraint(triggerId, activeFlowConstraint, affectedIsland, rule, nextSnapshot);
+    return buildRow(triggerId, nextSnapshot, matrixVersion, affectedIsland, flowDecision, nextPowerFlow, activeFlowConstraint);
   }
 
   const localFeeders = localEligibleFeeders(nextSnapshot.feeders, affectedIsland);
@@ -158,6 +180,116 @@ export function simulateContingency(
   return buildRow(triggerId, snapshot, matrixVersion, affectedIsland, decision);
 }
 
+
+function buildActiveFlowConstraintRow(
+  constraint: BranchFlowResult,
+  snapshot: SystemSnapshot,
+  topology: TopologyModel,
+  matrixVersion: number,
+  powerFlow: PowerFlowLiteResult,
+): TripMatrixRow | undefined {
+  const island = findIslandForBranchConstraint(constraint, topology);
+  if (!island) return undefined;
+
+  const requiredReductionMw = Math.ceil(constraint.requiredReductionMw);
+  const activeTriggerId = `ACTIVE_CONSTRAINT_${constraint.branchId}`;
+  const affectedBuses = island.buses;
+  const syntheticRule: ContingencyRule = {
+    title: `${constraint.branchId} Power Flow Constraint`,
+    mode: "LIVE POWER FLOW",
+    constraint: `${constraint.branchId} loading`,
+    affectedBuses,
+    strictAffectedBuses: true,
+    requiredReliefMw: requiredReductionMw,
+    actionType: "OLS_LOAD_SHEDDING",
+    scenarioKind: "ols_overload",
+    explanation:
+      "PowerFlowLite menemukan overload aktif pada snapshot sekarang. Ini adalah live/base decision, bukan sekadar contingency preview terakhir.",
+    imbalanceBasis:
+      `${constraint.branchId}: |flow| ${constraint.absFlowMw.toFixed(1)} MW, rating ${constraint.ratingMw} MW, loading ${constraint.loadingPct.toFixed(1)}%.`,
+    imbalanceFormula:
+      `Required reduction = |flow| ${constraint.absFlowMw.toFixed(1)} - 85% x ${constraint.ratingMw} = ${requiredReductionMw} MW`,
+  };
+
+  const decision = evaluateFlowConstraint(activeTriggerId, constraint, island, syntheticRule, snapshot);
+  const row = buildRow(
+    activeTriggerId,
+    snapshot,
+    matrixVersion,
+    island,
+    {
+      ...decision,
+      title: `${constraint.branchId} Active Flow Overload`,
+      mode: "LIVE POWER FLOW",
+      detectedCondition:
+        `${constraint.branchId}: |flow| ${constraint.absFlowMw.toFixed(1)} MW, loading ${constraint.loadingPct.toFixed(1)}%, direction ${constraint.directionLabel}.`,
+      operatorMessage:
+        decision.operatorMessage ??
+        `PowerFlowLite detects ${constraint.branchId} overload. ADS must reduce flow by ${requiredReductionMw} MW to reach <=85% rating target.`,
+    },
+    powerFlow,
+    constraint,
+    "none",
+  );
+
+  row.visualHints.highlightTriggerIds = [constraint.branchId];
+  return row;
+}
+
+function buildNormalBaseDecision(
+  snapshot: SystemSnapshot,
+  powerFlow: PowerFlowLiteResult,
+): AdsDecision {
+  const closedLoadMw = snapshot.feeders
+    .filter((feeder) => isClosedState(feeder.breakerState))
+    .reduce((sum, feeder) => sum + feeder.mw, 0);
+
+  return {
+    status: "normal",
+    requiredReliefMw: 0,
+    actionType: "NORMAL",
+    title: "PowerFlowLite Normal",
+    mode: "LIVE POWER FLOW",
+    constraint: powerFlow.warnings[0] ?? "No active branch overload",
+    explanation:
+      "PowerFlowLite tidak menemukan branch/IBT overload aktif pada snapshot sekarang.",
+    detectedCondition:
+      `Demand ${closedLoadMw} MW, active overloaded branches ${powerFlow.overloadedBranches.length}.`,
+    operatorMessage:
+      "Sistem tidak memiliki overload aktif menurut PowerFlowLite. Hover contingency CB untuk melihat preview arming.",
+    alternatives: [],
+    rejected: [],
+  };
+}
+
+function findIslandForBranchConstraint(
+  constraint: BranchFlowResult,
+  topology: TopologyModel,
+): ElectricalIsland | undefined {
+  const direct = topology.deviceIslandMap[constraint.branchId];
+  if (direct) {
+    const island = topology.islands.find((item) => item.id === direct);
+    if (island) return island;
+  }
+
+  const candidateBuses = dcBranchBusesToDisplayBuses(constraint);
+  const scoped = topology.islands.filter((island) =>
+    island.buses.some((bus) => candidateBuses.includes(bus)),
+  );
+  return scoped.sort((left, right) => right.loadMw - left.loadMw)[0] ?? topology.islands[0];
+}
+
+function dcBranchBusesToDisplayBuses(constraint: BranchFlowResult): Array<"A" | "B" | "C"> {
+  const buses = new Set<"A" | "B" | "C">();
+  const add = (bus: string) => {
+    if (bus === "GRID_A" || bus === "A") buses.add("A");
+    else if (bus === "GRID_C" || bus === "C") buses.add("C");
+    else if (bus === "B1" || bus === "B2") buses.add("B");
+  };
+  add(constraint.fromBus);
+  add(constraint.toBus);
+  return [...buses];
+}
 
 
 function isClosedState(state: BreakerState | undefined): boolean {
@@ -610,6 +742,61 @@ export function evaluateIslandBalance(
   };
 }
 
+
+function evaluateFlowConstraint(
+  triggerId: string,
+  constraint: BranchFlowResult,
+  island: ElectricalIsland,
+  rule: ContingencyRule,
+  snapshot: SystemSnapshot,
+): AdsDecision {
+  const requiredReductionMw = Math.ceil(constraint.requiredReductionMw);
+  const localFeeders = localEligibleFeeders(snapshot.feeders, island);
+  const decision = rankShedding(localFeeders, requiredReductionMw, {
+    ...enrichRuleContext(triggerId, rule),
+    title: `${constraint.branchId} Flow Constraint`,
+    mode: "POWER FLOW LITE",
+    actionType: "OLS_LOAD_SHEDDING",
+    scenarioKind: "ols_overload",
+    strictAffectedBuses: true,
+    affectedBuses: island.buses,
+    constraint: `${constraint.branchId} loading ${constraint.loadingPct.toFixed(1)}%`,
+    explanation:
+      "Power Flow Lite estimates branch MW flow after the contingency and arms only local targets that can reduce the active constraint.",
+    detectedCondition:
+      `${constraint.branchId}: |flow| ${constraint.absFlowMw.toFixed(1)} MW > 110% rating ${constraint.ratingMw} MW. Direction ${constraint.directionLabel}.`,
+    operatorMessage:
+      `Power Flow Lite detects ${constraint.branchId} overload. Required reduction ${requiredReductionMw} MW to reach <=85% loading target.`,
+    imbalanceBasis:
+      `${constraint.branchId}: flow ${constraint.absFlowMw.toFixed(1)} MW, rating ${constraint.ratingMw} MW, loading ${constraint.loadingPct.toFixed(1)}%.`,
+    imbalanceFormula:
+      `Required reduction = |flow| ${constraint.absFlowMw.toFixed(1)} - 85% x ${constraint.ratingMw} = ${requiredReductionMw} MW`,
+    steps: [
+      "Build system snapshot.",
+      "Solve DC-style Power Flow Lite per active island.",
+      "Detect branch loading above 110% pickup.",
+      "Calculate required reduction to 85% rating target.",
+      "Rank local load combinations inside the affected island.",
+    ],
+    passCriteria: [
+      "Branch loading pickup is evaluated from Power Flow Lite.",
+      "Targets are local to the constrained electrical area.",
+      "Final target aims to reduce loading to <=85% rating.",
+    ],
+  });
+
+  if (decision.status === "normal") return decision;
+  if (localFeeders.length === 0) {
+    return {
+      ...decision,
+      status: "blocked",
+      operatorMessage:
+        `Power Flow Lite detects ${constraint.branchId} overload, but no local closed load target exists in island ${island.id}.`,
+    };
+  }
+  return decision;
+}
+
 export function tripMatrixRowToDecision(row: TripMatrixRow | undefined): AdsDecision | null {
   return row?.decision ?? null;
 }
@@ -620,6 +807,9 @@ function buildRow(
   matrixVersion: number,
   island: ElectricalIsland | undefined,
   decision: AdsDecision,
+  powerFlow?: PowerFlowLiteResult,
+  activeFlowConstraint?: BranchFlowResult,
+  triggerAction: "open" | "none" = "open",
 ): TripMatrixRow {
   const remedialCommands = buildRemedialCommands(decision);
   const selectedTargets = remedialCommands.map((command) => command.objectId);
@@ -633,12 +823,14 @@ function buildRow(
     affectedBuses: island?.buses ?? decision.affectedBuses ?? [],
     triggerCommand: {
       objectId: triggerId,
-      action: "open",
+      action: triggerAction,
     },
     remedialCommands,
     selectedTargets,
     visualHints: buildVisualHints(triggerId, island, decision, remedialCommands),
     blockedReason: decision.status === "blocked" ? decision.operatorMessage : undefined,
+    activeFlowConstraint,
+    powerFlow,
     decision,
   };
 }

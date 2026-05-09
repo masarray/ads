@@ -74,11 +74,12 @@ function buildMatrix(
   );
 }
 
-function matrixState(matrix: TripMatrix): Pick<AdsStore, "tripMatrix" | "matrixVersion" | "snapshotHash"> {
+function matrixState(matrix: TripMatrix): Pick<AdsStore, "tripMatrix" | "matrixVersion" | "snapshotHash" | "decision"> {
   return {
     tripMatrix: matrix,
     matrixVersion: matrix.matrixVersion,
     snapshotHash: matrix.snapshotHash,
+    decision: matrix.baseDecision,
   };
 }
 
@@ -87,12 +88,15 @@ function executeTripMatrixRowState(
   feeders: Feeder[],
   objectStates: Record<string, BreakerState>,
 ): { feeders: Feeder[]; objectStates: Record<string, BreakerState>; events: string[]; appliedTargets: string[] } {
-  const nextStates = {
-    ...objectStates,
-    [row.triggerCommand.objectId]: "open" as BreakerState,
-  };
+  const nextStates = { ...objectStates };
+  const events: string[] = [];
+  if (row.triggerCommand.action === "open") {
+    nextStates[row.triggerCommand.objectId] = "open" as BreakerState;
+    events.push(`Trip matrix trigger: ${row.triggerCommand.objectId} opened.`);
+  } else {
+    events.push(`Trip matrix active decision: ${row.triggerId} uses current snapshot; no trigger CB opened.`);
+  }
   let nextFeeders = feeders;
-  const events = [`Trip matrix trigger: ${row.triggerCommand.objectId} opened.`];
   const appliedTargets: string[] = [];
 
   for (const command of row.remedialCommands) {
@@ -292,7 +296,7 @@ function previewDecisionForTopology(
     };
   }
 
-  const hypotheticalStates = {
+  const hypotheticalStates: Record<string, BreakerState> = {
     ...objectStates,
     [objectId]: objectStates[objectId] === "open" ? "closed" : "open"
   };
@@ -343,7 +347,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
   sourceMw: 625,
   minReserveMw: 80,
   requiredReliefMw: 0,
-  decision: rankShedding(initialFeeders, 0),
+  decision: initialTripMatrix.baseDecision,
   hoverDecision: null,
   hoverObjectId: null,
   eventLog: [],
@@ -361,7 +365,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       sourceMw: 625,
       minReserveMw: 80,
       requiredReliefMw: 0,
-      decision: rankShedding(feeders, 0),
+      decision: tripMatrix.baseDecision,
       hoverDecision: null,
       hoverObjectId: null,
       eventLog: ["System reset. All controllable breakers closed."],
@@ -617,7 +621,9 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       sourceMw,
       frequencyHz,
       requiredReliefMw,
-      decision,
+      // Live/base decision always comes from the rebuilt Trip Matrix.
+      // Executed/hover preview is not latched here; hover uses hoverDecision only.
+      decision: tripMatrix.baseDecision,
       hoverDecision: null,
       hoverObjectId: null,
       activeContingencyId: kind === "topology_split" ? "LINE_COUPLER" : null,
@@ -646,7 +652,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       feeders,
       objectStates,
       ...matrixState(tripMatrix),
-      decision: get().decision.status === "executed" ? get().decision : rankShedding(feeders, 0),
+      decision: tripMatrix.baseDecision,
       hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null
     });
   },
@@ -722,9 +728,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
         feeders,
         objectStates,
         ...matrixState(tripMatrix),
-        decision: currentStore.decision.status === "executed"
-          ? currentStore.decision
-          : rankShedding(feeders, 0),
+        decision: tripMatrix.baseDecision,
         hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null,
         activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
         eventLog: [`Manual load toggle: ${objectId} ${nextState}.`, ...currentStore.eventLog].slice(0, 120),
@@ -794,7 +798,9 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       feeders,
       objectStates,
       ...matrixState(tripMatrix),
-      decision,
+      // Live/base decision always comes from the rebuilt Trip Matrix.
+      // Executed/hover preview is not latched here; hover uses hoverDecision only.
+      decision: tripMatrix.baseDecision,
       hoverDecision: null,
       activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
       eventLog: eventItems.length
@@ -804,7 +810,15 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
   },
   setHoverObject: (hoverObjectId) => {
     if (get().hoverObjectId === hoverObjectId) return;
-    const matrixRow = hoverObjectId ? get().tripMatrix.rows[hoverObjectId] : undefined;
+
+    // Hover is a pure Trip Matrix preview. It never reads PowerFlowLite directly,
+    // never uses legacy evaluator fallback, and never latches a live/base row.
+    if (!hoverObjectId) {
+      set({ hoverObjectId: null, hoverDecision: null });
+      return;
+    }
+
+    const matrixRow = get().tripMatrix.rows[hoverObjectId];
     const matrixDecision =
       matrixRow?.snapshotHash === get().snapshotHash ? matrixRow.decision : null;
 

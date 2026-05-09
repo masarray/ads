@@ -2,6 +2,7 @@ export type BreakerState = "closed" | "open" | "failed";
 export type FeederKind = "load" | "generator" | "ibt" | "line" | "coupler";
 export type LoadGroup = 1 | 2 | 3 | 4;
 export type BusId = "A" | "B" | "C";
+export type DcBusId = "GRID_A" | "A" | "B1" | "B2" | "C" | "GRID_C";
 export type DefenseActionType =
   | "NORMAL"
   | "MANUAL_RELIEF"
@@ -112,6 +113,29 @@ export interface SystemSnapshot {
   snapshotHash: string;
 }
 
+export interface BranchFlowResult {
+  branchId: string;
+  fromBus: DcBusId;
+  toBus: DcBusId;
+  status: "closed" | "open";
+  flowMw: number;
+  absFlowMw: number;
+  ratingMw: number;
+  loadingPct: number;
+  targetMaxMw: number;
+  requiredReductionMw: number;
+  isOverloaded: boolean;
+  directionLabel: string;
+}
+
+export interface PowerFlowLiteResult {
+  buses: Array<{ id: DcBusId; pInjectionMw: number; angleRad: number; islandId: string }>;
+  branches: BranchFlowResult[];
+  overloadedBranches: BranchFlowResult[];
+  slackByIsland: Record<string, DcBusId>;
+  warnings: string[];
+}
+
 export interface ElectricalIsland {
   id: string;
   buses: BusId[];
@@ -153,7 +177,7 @@ export interface TripMatrixRow {
   affectedBuses: BusId[];
   triggerCommand: {
     objectId: string;
-    action: "open";
+    action: "open" | "none";
   };
   remedialCommands: Array<{
     objectId: string;
@@ -165,6 +189,8 @@ export interface TripMatrixRow {
   selectedTargets: string[];
   visualHints: TripMatrixVisualHints;
   blockedReason?: string;
+  activeFlowConstraint?: BranchFlowResult;
+  powerFlow?: PowerFlowLiteResult;
   decision: AdsDecision;
 }
 
@@ -173,4 +199,14 @@ export interface TripMatrix {
   snapshotHash: string;
   rows: Record<string, TripMatrixRow>;
   topology: TopologyModel;
+  powerFlow: PowerFlowLiteResult;
+  /**
+   * Active/live ADS decision derived from the current snapshot.
+   * This is intentionally separate from contingency preview rows so the UI
+   * does not keep showing the last clicked event while PowerFlowLite has
+   * detected a live overload.
+   */
+  baseDecision: AdsDecision;
+  activeRowId?: string;
+  activeFlowConstraint?: BranchFlowResult;
 }

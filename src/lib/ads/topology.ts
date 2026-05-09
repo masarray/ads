@@ -193,7 +193,8 @@ function feederTopologyNode(feeder: Feeder): TopologyNodeId {
 }
 
 function busTopologyNode(bus: BusId): TopologyNodeId {
-  return bus;
+  if (bus === "A" || bus === "C") return bus;
+  return "B1";
 }
 
 function displayBus(node: TopologyNodeId): BusId {
