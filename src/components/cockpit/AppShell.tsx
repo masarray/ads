@@ -188,6 +188,7 @@ export function AppShell() {
                   </div>
                   <button
                     className="freq-inject"
+                    disabled={scenarioRun?.active}
                     onClick={() => {
                       runTimedScenario("frequency_islanding", draftFrequencyHz);
                       setFrequencyOpen(false);
@@ -203,6 +204,7 @@ export function AppShell() {
 
           <button
             className="command-button"
+            disabled={scenarioRun?.active}
             onClick={() => runTimedScenario("topology_split")}
             type="button"
           >
@@ -211,6 +213,7 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
+            disabled={scenarioRun?.active}
             onClick={() => runTimedScenario("generation_derate")}
             type="button"
           >
@@ -219,6 +222,7 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
+            disabled={scenarioRun?.active}
             onClick={() => runTimedScenario("ols_overload")}
             type="button"
           >
@@ -227,6 +231,7 @@ export function AppShell() {
           </button>
           <button
             className="command-button"
+            disabled={scenarioRun?.active}
             onClick={() => runTimedScenario("ogs_surplus")}
             type="button"
           >

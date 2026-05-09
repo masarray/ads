@@ -652,49 +652,146 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     if (get().scenarioRun?.active) return;
 
     const title = scenarioTitle(kind);
+    const previewDelayMs = 1000;
+    const actionDelayMs = 800;
+
+    const totalByKind: Record<ScenarioKind, number> = {
+      manual_relief: 2,
+      topology_split: 2,
+      generation_derate: 2,
+      frequency_islanding: 5,
+      ols_overload: 2,
+      ogs_surplus: 6,
+    };
+
+    const total = totalByKind[kind] ?? 2;
+    let step = 0;
+
+    const emit = (message: string, log?: string) => {
+      step += 1;
+      set({
+        scenarioRun: {
+          active: true,
+          title,
+          step,
+          total,
+          message,
+        },
+        eventLog: [log ?? `${title}: ${message}`, ...get().eventLog].slice(0, 120),
+      });
+    };
+
+    const clearPreview = () => {
+      if (get().hoverObjectId) get().setHoverObject(null);
+    };
+
+    const previewObject = async (objectId: string, message: string) => {
+      emit(
+        `Preview: ${message}`,
+        `Scenario preview: hover ${objectId}. Trip Matrix row is shown before the action is executed.`,
+      );
+      get().setHoverObject(objectId);
+      await wait(previewDelayMs);
+    };
+
+    const executeObjectOpen = async (objectId: string, message: string) => {
+      emit(
+        `Execute: ${message}`,
+        `Scenario action: execute ${objectId} through the same SLD click path.`,
+      );
+      const state = get().objectStates[objectId] ?? "closed";
+      if (state !== "open" && state !== "failed") {
+        get().toggleObject(objectId);
+      } else {
+        set({
+          eventLog: [`Scenario action skipped: ${objectId} is already open.`, ...get().eventLog].slice(0, 120),
+        });
+      }
+      clearPreview();
+      await wait(actionDelayMs);
+    };
+
+    const applyFrequencyPreview = async (hz: number, message: string) => {
+      emit(
+        message,
+        `Frequency guided preview: ${hz.toFixed(2)} Hz. Rebuilding Trip Matrix without executing load trip yet.`,
+      );
+      const current = get();
+      const tripMatrix = buildMatrix(
+        current.feeders,
+        current.objectStates,
+        current.contingencyRules,
+        current.sourceMw,
+        current.minReserveMw,
+        hz,
+      );
+      set({
+        frequencyHz: hz,
+        ...matrixState(tripMatrix),
+        decision: tripMatrix.baseDecision,
+        hoverDecision: null,
+        hoverObjectId: null,
+      });
+      await wait(actionDelayMs);
+    };
+
+    const applyScenarioAfterPreview = async (scenarioKind: ScenarioKind, scenarioValue: number | undefined, message: string) => {
+      emit(message, `Scenario action: apply ${scenarioKind} after visual preview.`);
+      clearPreview();
+      get().injectScenario(scenarioKind, scenarioValue);
+      await wait(actionDelayMs);
+    };
+
     set({
       scenarioRun: {
         active: true,
         title,
         step: 0,
-        total: 2,
-        message: "Preparing timed scenario. This uses the same application command path as operator actions.",
+        total,
+        message: "Starting guided scenario. Hover preview is shown first, then the same action path as SLD click is executed.",
       },
-      eventLog: [`Scenario started: ${title}. Step timing ${sequenceDelayMs / 1000}s.`, ...get().eventLog].slice(0, 120),
+      eventLog: [`Scenario started: ${title}. Preview delay 1.0s, action delay ${(actionDelayMs / 1000).toFixed(1)}s.`, ...get().eventLog].slice(0, 120),
     });
 
-    await wait();
-
-    set({
-      scenarioRun: {
-        active: true,
-        title,
-        step: 1,
-        total: 2,
-        message:
-          kind === "topology_split"
-            ? "Operator action: open Bus B coupler."
-            : kind === "frequency_islanding"
-              ? `Parameter action: inject ${(value ?? 48.25).toFixed(2)} Hz.`
-              : "Scenario action: apply system event and rebuild Trip Matrix.",
-      },
-    });
+    await wait(300);
 
     if (kind === "topology_split") {
-      if (get().objectStates.LINE_COUPLER !== "open") get().toggleObject("LINE_COUPLER");
+      await previewObject("LINE_COUPLER", "Bus B coupler contingency. Watch Trip Matrix arming before the coupler opens.");
+      await executeObjectOpen("LINE_COUPLER", "Open Bus B coupler as an operator CB action.");
+    } else if (kind === "ogs_surplus") {
+      await previewObject("LINE_AC", "Open Line A-C to start separating the C area.");
+      await executeObjectOpen("LINE_AC", "Trip Line A-C.");
+
+      await previewObject("LINE_BC", "Open Line B-C so C is separated from the A/B network.");
+      await executeObjectOpen("LINE_BC", "Trip Line B-C.");
+
+      await previewObject("IBT_C", "Trip IBT C / grid support. This tests whether the C area becomes a true island and whether OGS/runback is required.");
+      await executeObjectOpen("IBT_C", "Trip IBT C as the final island-forming contingency.");
+    } else if (kind === "generation_derate") {
+      await previewObject("GEN_C2", "KIT C2 derate scenario. Generator stays online but available MW is reduced.");
+      await applyScenarioAfterPreview("generation_derate", value, "Apply KIT C2 derate and rebuild PowerFlowLite + Trip Matrix.");
+    } else if (kind === "ols_overload") {
+      await previewObject("IBT_C", "IBT C overload scenario. ADS should show why the load-side relief target is selected.");
+      await applyScenarioAfterPreview("ols_overload", value, "Apply IBT C overload test case after preview.");
+    } else if (kind === "frequency_islanding") {
+      const finalHz = value ?? 48.25;
+      await applyFrequencyPreview(50.0, "Frequency normal reference: 50.00 Hz. No frequency-based ADS action yet.");
+      await applyFrequencyPreview(49.0, "Frequency enters UFLS coordination zone. ADS prepares but does not blindly trip.");
+      await applyFrequencyPreview(48.4, "Frequency approaches islanding threshold. Trip Matrix is recalculated from the current state.");
+      await applyFrequencyPreview(finalHz, `Final frequency injection ${finalHz.toFixed(2)} Hz. ADS preview is now visible before execution.`);
+      await applyScenarioAfterPreview("frequency_islanding", finalHz, `Execute frequency injection at ${finalHz.toFixed(2)} Hz.`);
     } else {
-      get().injectScenario(kind, value);
+      await applyScenarioAfterPreview(kind, value, "Apply timed scenario.");
     }
 
-    await wait();
-
+    clearPreview();
     set({
       scenarioRun: {
         active: false,
         title,
-        step: 2,
-        total: 2,
-        message: "Scenario complete. Review Power Flow cards, Trip Matrix, and Event Log.",
+        step: total,
+        total,
+        message: "Guided scenario complete. Review SLD response, Power Flow card, Trip Matrix, and Event Log.",
       },
       eventLog: [`Scenario complete: ${title}.`, ...get().eventLog].slice(0, 120),
     });
