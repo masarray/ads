@@ -77,13 +77,13 @@ export function simulateContingency(
     ? currentTopology.islands.find((island) => island.id === currentIslandId)
     : undefined;
 
-  const currentOgsTargetDecision = currentIsland
-    ? evaluateCurrentIslandOgsTarget(triggerId, currentIsland, rule)
-    : null;
-  if (currentOgsTargetDecision && currentOgsTargetDecision.status !== "normal") {
-    return buildRow(triggerId, snapshot, matrixVersion, currentIsland, currentOgsTargetDecision);
-  }
-
+  // IMPORTANT BEHAVIOR CONTRACT:
+  // A matrix row keyed by a controllable object is always a WHAT-IF
+  // contingency row for that object. Hovering GEN_A1 means:
+  // "if GEN_A1 trips/open, what will happen?"
+  // It must NOT be reinterpreted as "GEN_A1 is a possible OGS target"
+  // just because the CURRENT island is already overgenerated. That old shortcut
+  // made generator hover show OGS/runback instead of source-loss preview.
   const nextSnapshot = withToggledState(snapshot, triggerId);
   const nextTopology = calculateIslands(nextSnapshot);
   const nextPowerFlow = solvePowerFlowLite(nextSnapshot);

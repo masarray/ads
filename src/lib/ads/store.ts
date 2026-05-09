@@ -83,6 +83,180 @@ function matrixState(matrix: TripMatrix): Pick<AdsStore, "tripMatrix" | "matrixV
   };
 }
 
+
+type BusbarId = "A" | "B1" | "B2" | "C";
+
+const deadBusEdges: Array<{ id: string; from: BusbarId; to: BusbarId }> = [
+  { id: "LINE_AB", from: "A", to: "B1" },
+  { id: "LINE_COUPLER", from: "B1", to: "B2" },
+  { id: "LINE_BC", from: "B2", to: "C" },
+  { id: "LINE_AC", from: "A", to: "C" },
+];
+
+const deadBusSourceMap: Record<string, BusbarId> = {
+  IBT_A: "A",
+  GEN_A1: "A",
+  GEN_A2: "A",
+  IBT_C: "C",
+  GEN_C1: "C",
+  GEN_C2: "C",
+};
+
+function feederBusbar(feeder: Feeder): BusbarId {
+  if (feeder.bus === "A") return "A";
+  if (feeder.bus === "C") return "C";
+  // The demo SLD has B bus split into two sections. LOAD_B2 sits on B2;
+  // the other B loads are on B1.
+  return feeder.id === "LOAD_B2" ? "B2" : "B1";
+}
+
+function calculateBusbarEnergized(objectStates: Record<string, BreakerState>): Record<BusbarId, boolean> {
+  const buses: BusbarId[] = ["A", "B1", "B2", "C"];
+  const adjacency = new Map<BusbarId, BusbarId[]>();
+  for (const bus of buses) adjacency.set(bus, []);
+
+  for (const edge of deadBusEdges) {
+    if (objectStates[edge.id] !== "open" && objectStates[edge.id] !== "failed") {
+      adjacency.get(edge.from)?.push(edge.to);
+      adjacency.get(edge.to)?.push(edge.from);
+    }
+  }
+
+  const sourceBuses = new Set<BusbarId>();
+  for (const [sourceId, bus] of Object.entries(deadBusSourceMap)) {
+    if (objectStates[sourceId] !== "open" && objectStates[sourceId] !== "failed") {
+      sourceBuses.add(bus);
+    }
+  }
+
+  const result = Object.fromEntries(buses.map((bus) => [bus, false])) as Record<BusbarId, boolean>;
+  const visited = new Set<BusbarId>();
+
+  for (const start of buses) {
+    if (visited.has(start)) continue;
+    const component: BusbarId[] = [];
+    const queue: BusbarId[] = [start];
+    visited.add(start);
+
+    while (queue.length) {
+      const bus = queue.shift()!;
+      component.push(bus);
+      for (const next of adjacency.get(bus) ?? []) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+
+    const energized = component.some((bus) => sourceBuses.has(bus));
+    for (const bus of component) result[bus] = energized;
+  }
+
+  return result;
+}
+
+function connectedDevicesForBus(bus: BusbarId, feeders: Feeder[]): string[] {
+  const fixed: Record<BusbarId, string[]> = {
+    A: ["IBT_A", "GEN_A1", "GEN_A2", "LINE_AB", "LINE_AC"],
+    B1: ["LINE_AB", "LINE_COUPLER"],
+    B2: ["LINE_COUPLER", "LINE_BC"],
+    C: ["IBT_C", "GEN_C1", "GEN_C2", "LINE_BC", "LINE_AC"],
+  };
+
+  return [
+    ...fixed[bus],
+    ...feeders.filter((feeder) => feederBusbar(feeder) === bus).map((feeder) => feeder.id),
+  ];
+}
+
+function applyDeadBusIsolation(
+  previousObjectStates: Record<string, BreakerState>,
+  feeders: Feeder[],
+  objectStates: Record<string, BreakerState>,
+): { feeders: Feeder[]; objectStates: Record<string, BreakerState>; events: string[] } {
+  const previous = calculateBusbarEnergized(previousObjectStates);
+  const current = calculateBusbarEnergized(objectStates);
+  const buses: BusbarId[] = ["A", "B1", "B2", "C"];
+  let nextFeeders = feeders;
+  const nextStates = { ...objectStates };
+  const events: string[] = [];
+
+  for (const bus of buses) {
+    // One-shot transition guard: isolate only when a busbar moves from energized
+    // to dead. This avoids continuous cascade on every render/rebuild.
+    if (previous[bus] === true && current[bus] === false) {
+      const devices = connectedDevicesForBus(bus, nextFeeders);
+      const opened: string[] = [];
+
+      for (const id of devices) {
+        if (nextStates[id] === "open" || nextStates[id] === "failed") continue;
+        nextStates[id] = "open";
+        opened.push(id);
+      }
+
+      if (opened.length) {
+        nextFeeders = nextFeeders.map((feeder) =>
+          opened.includes(feeder.id)
+            ? { ...feeder, breakerState: "open" as BreakerState }
+            : feeder,
+        );
+        events.push(
+          `Dead bus isolation: Bus ${bus} lost voltage. Opened connected CBs: ${opened.join(", ")}.`,
+        );
+      }
+    }
+  }
+
+  return { feeders: nextFeeders, objectStates: nextStates, events };
+}
+
+
+function debugTripMatrixContext(
+  label: string,
+  row: TripMatrixRow | undefined,
+  matrix: TripMatrix,
+): void {
+  if (!import.meta.env.DEV || !row) return;
+
+  const branches = (row.powerFlow ?? matrix.powerFlow).branches
+    .filter((branch) => branch.status === "closed")
+    .sort((left, right) => right.loadingPct - left.loadingPct)
+    .slice(0, 6)
+    .map((branch) => ({
+      branch: branch.branchId,
+      flowMw: branch.flowMw,
+      absMw: branch.absFlowMw,
+      loadingPct: branch.loadingPct,
+      ratingMw: branch.ratingMw,
+      overloaded: branch.isOverloaded,
+      direction: branch.directionLabel,
+    }));
+
+  // This is intentionally console-only debugging. It helps verify that hover
+  // preview, click execution, and PowerFlowLite all read the same TripMatrix row.
+  // It does not change application state.
+  // eslint-disable-next-line no-console
+  console.groupCollapsed(`[ADS Debug] ${label}: ${row.triggerId} · ${row.decision.title ?? row.status}`);
+  // eslint-disable-next-line no-console
+  console.log({
+    snapshotHash: matrix.snapshotHash,
+    rowSnapshotHash: row.snapshotHash,
+    status: row.status,
+    triggerCommand: row.triggerCommand,
+    selectedTargets: row.selectedTargets,
+    remedialCommands: row.remedialCommands,
+    actionType: row.decision.actionType,
+    scenarioKind: row.decision.scenarioKind,
+    requiredReliefMw: row.decision.requiredReliefMw,
+    formula: row.decision.imbalanceFormula,
+    basis: row.decision.imbalanceBasis,
+  });
+  // eslint-disable-next-line no-console
+  console.table(branches);
+  // eslint-disable-next-line no-console
+  console.groupEnd();
+}
+
 function executeTripMatrixRowState(
   row: TripMatrixRow,
   feeders: Feeder[],
@@ -706,13 +880,17 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
 
     // Operator load operation is always manual. It must never execute ADS targets.
     if (isLoad) {
-      const feeders = currentStore.feeders.map((feeder) =>
+      let feeders = currentStore.feeders.map((feeder) =>
         feeder.id === objectId ? { ...feeder, breakerState: nextState } : feeder
       );
-      const objectStates = {
+      let objectStates = {
         ...currentStore.objectStates,
         [objectId]: nextState,
       };
+      const isolated = applyDeadBusIsolation(currentStore.objectStates, feeders, objectStates);
+      feeders = isolated.feeders;
+      objectStates = isolated.objectStates;
+
       const rules = contextualRulesForTopology(currentStore.contingencyRules, objectStates);
       const tripMatrix = buildMatrix(
         feeders,
@@ -731,12 +909,13 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
         decision: tripMatrix.baseDecision,
         hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null,
         activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
-        eventLog: [`Manual load toggle: ${objectId} ${nextState}.`, ...currentStore.eventLog].slice(0, 120),
+        eventLog: [`Manual load toggle: ${objectId} ${nextState}.`, ...isolated.events, ...currentStore.eventLog].slice(0, 120),
       });
       return;
     }
 
     const row = currentStore.tripMatrix.rows[objectId];
+    debugTripMatrixContext("CLICK PRE-EVENT ROW", row, currentStore.tripMatrix);
     const rowIsFresh = Boolean(row && row.snapshotHash === currentStore.snapshotHash);
     const isContingencyTrigger = isContingencyObject(objectId, currentStore.contingencyRules);
 
@@ -784,6 +963,11 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       eventItems.push(`Manual network toggle: ${objectId} ${nextState}.`);
     }
 
+    const isolated = applyDeadBusIsolation(currentStore.objectStates, feeders, objectStates);
+    feeders = isolated.feeders;
+    objectStates = isolated.objectStates;
+    if (isolated.events.length) eventItems.push(...isolated.events);
+
     const rules = contextualRulesForTopology(currentStore.contingencyRules, objectStates);
     const tripMatrix = buildMatrix(
       feeders,
@@ -818,7 +1002,9 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       return;
     }
 
-    const matrixRow = get().tripMatrix.rows[hoverObjectId];
+    const matrix = get().tripMatrix;
+    const matrixRow = matrix.rows[hoverObjectId];
+    debugTripMatrixContext("HOVER PREVIEW ROW", matrixRow, matrix);
     const matrixDecision =
       matrixRow?.snapshotHash === get().snapshotHash ? matrixRow.decision : null;
 

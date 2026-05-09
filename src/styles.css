@@ -3234,3 +3234,25 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Phase 15: exact SVG busbar state coloring.
+   Busbar state is applied directly to the four busbar <line> elements by ID
+   in SldCanvas. No HTML overlays are used, so the SLD geometry will not drift
+   or cover the diagram. */
+.busbar.busbar-dead {
+  stroke: #eefdfa !important;
+  opacity: 0.92 !important;
+  filter: drop-shadow(0 0 7px rgba(238, 253, 250, 0.82)) !important;
+}
+
+.busbar.busbar-energized {
+  stroke: #ff3046 !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 2px rgba(255, 48, 70, 0.52)) !important;
+}
+
+.busbar.busbar-dead + text,
+.busbar.busbar-dead ~ text {
+  opacity: 0.72;
+}
+

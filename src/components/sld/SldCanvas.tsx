@@ -94,6 +94,98 @@ const areaCardPositions: Array<{
   { id: "C", name: "Substation C", x: 1358, y: 420 },
 ];
 
+type BusbarId = "A" | "B1" | "B2" | "C";
+
+// The SLD SVG now exposes the actual busbar conductors with stable IDs.
+// Do not use HTML overlays for busbar state: overlays drift when zoom/pan/viewBox
+// changes and can cover the one-line diagram. We recolor only these exact SVG
+// line elements, never broad path/polygon selectors.
+const busbarElementMap: Record<BusbarId, string[]> = {
+  A: ["GI_A_BUS"],
+  B1: ["GI_B_BUSA"],
+  B2: ["GI_B_BUSB"],
+  C: ["GI_C_BUS"],
+};
+
+const busbarLabelMap: Record<BusbarId, string> = {
+  A: "Bus A",
+  B1: "Bus B-I",
+  B2: "Bus B-II",
+  C: "Bus C",
+};
+
+const graphEdges: Array<{ id: string; from: BusbarId; to: BusbarId }> = [
+  { id: "LINE_AB", from: "A", to: "B1" },
+  { id: "LINE_COUPLER", from: "B1", to: "B2" },
+  { id: "LINE_BC", from: "B2", to: "C" },
+  { id: "LINE_AC", from: "A", to: "C" },
+];
+
+const sourceAtBus: Record<string, BusbarId> = {
+  IBT_A: "A",
+  GEN_A1: "A",
+  GEN_A2: "A",
+  IBT_C: "C",
+  GEN_C1: "C",
+  GEN_C2: "C",
+};
+
+function buildBusbarEnergizedMap(
+  objectStates: Record<string, string>,
+): Record<BusbarId, boolean> {
+  const buses: BusbarId[] = ["A", "B1", "B2", "C"];
+  const adjacency = new Map<BusbarId, BusbarId[]>();
+  for (const bus of buses) adjacency.set(bus, []);
+
+  for (const edge of graphEdges) {
+    if (
+      objectStates[edge.id] !== "open" &&
+      objectStates[edge.id] !== "failed"
+    ) {
+      adjacency.get(edge.from)?.push(edge.to);
+      adjacency.get(edge.to)?.push(edge.from);
+    }
+  }
+
+  const sourceBuses = new Set<BusbarId>();
+  for (const [sourceId, bus] of Object.entries(sourceAtBus)) {
+    if (
+      objectStates[sourceId] !== "open" &&
+      objectStates[sourceId] !== "failed"
+    ) {
+      sourceBuses.add(bus);
+    }
+  }
+
+  const result = Object.fromEntries(buses.map((bus) => [bus, false])) as Record<
+    BusbarId,
+    boolean
+  >;
+  const visited = new Set<BusbarId>();
+
+  for (const start of buses) {
+    if (visited.has(start)) continue;
+    const component: BusbarId[] = [];
+    const queue: BusbarId[] = [start];
+    visited.add(start);
+
+    while (queue.length) {
+      const bus = queue.shift()!;
+      component.push(bus);
+      for (const next of adjacency.get(bus) ?? []) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+
+    const energized = component.some((bus) => sourceBuses.has(bus));
+    for (const bus of component) result[bus] = energized;
+  }
+
+  return result;
+}
+
 const localGenerationByArea: Record<
   AreaCardId,
   Array<{ id: string; mw: number }>
@@ -224,6 +316,57 @@ export function SldCanvas() {
       ),
     [previewPowerFlow],
   );
+
+  const busbarEnergized = useMemo(
+    () => buildBusbarEnergizedMap(objectStates),
+    [objectStates],
+  );
+
+  useEffect(() => {
+    const root = hostRef.current?.querySelector("svg");
+    if (!root || !loaded) return;
+
+    for (const [busId, elementIds] of Object.entries(busbarElementMap) as Array<
+      [BusbarId, string[]]
+    >) {
+      const isEnergized = busbarEnergized[busId];
+      for (const elementId of elementIds) {
+        const node = root.querySelector<SVGGraphicsElement>(
+          `#${CSS.escape(elementId)}`,
+        );
+        if (!node) continue;
+
+        node.classList.toggle("busbar-dead", !isEnergized);
+        node.classList.toggle("busbar-energized", isEnergized);
+        node.setAttribute("data-energized", isEnergized ? "true" : "false");
+        node.setAttribute(
+          "aria-label",
+          `${busbarLabelMap[busId]} ${isEnergized ? "energized" : "dead"}`,
+        );
+
+        // Inline !important on the exact busbar element is safer than generic SVG CSS.
+        // It also reliably overrides the embedded SVG runtime style when the busbar
+        // returns from dead to energized.
+        node.style.setProperty(
+          "stroke",
+          isEnergized ? "#ff3046" : "#eefdfa",
+          "important",
+        );
+        node.style.setProperty(
+          "filter",
+          isEnergized
+            ? "drop-shadow(0 0 2px rgba(255,48,70,.52))"
+            : "drop-shadow(0 0 7px rgba(238,253,250,.82))",
+          "important",
+        );
+        node.style.setProperty(
+          "opacity",
+          isEnergized ? "1" : "0.92",
+          "important",
+        );
+      }
+    }
+  }, [busbarEnergized, loaded]);
 
   const activeFlowBranch = useMemo(() => {
     if (hoverObjectId && previewBranchFlowById.has(hoverObjectId)) {
