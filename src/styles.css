@@ -3746,7 +3746,7 @@ button {
   white-space: nowrap;
 }
 
-/* ============== Startup UX / lazy loading skeletons ============== */
+/* Phase 24E: startup splash + lazy tab skeleton only. No SLD loading skeleton. */
 .startup-splash {
   align-items: center;
   background:
@@ -3988,8 +3988,7 @@ button {
   width: min(560px, calc(100vw - 56px));
 }
 
-.skeleton-lines span,
-.engineer-panel-skeleton span {
+.skeleton-lines span {
   animation: skeleton-sheen 1.7s ease-in-out infinite;
   background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(125,240,226,0.18), rgba(255,255,255,0.04));
   background-size: 220% 100%;
@@ -4011,84 +4010,4 @@ button {
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.72; transform: scale(0.95); }
   50% { opacity: 1; transform: scale(1.05); }
-}
-
-.sld-stage-skeleton {
-  align-items: center;
-  display: grid;
-  justify-items: center;
-  min-height: 0;
-  padding: 24px;
-}
-
-.sld-startup-card {
-  background: rgba(6, 18, 16, 0.86);
-  border: 1px dashed rgba(125, 240, 226, 0.24);
-  border-radius: 24px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-  max-width: 460px;
-  padding: 24px;
-  text-align: center;
-}
-
-.sld-startup-icon {
-  animation: skeleton-pulse 1.2s ease-in-out infinite;
-  background: radial-gradient(circle at 36% 30%, #eafffb, var(--m3-primary));
-  border-radius: 999px;
-  height: 34px;
-  width: 34px;
-}
-
-.sld-startup-card h3 {
-  font-size: 17px;
-  margin: 0;
-}
-
-.sld-startup-card p {
-  color: var(--m3-muted);
-  font-size: 12.5px;
-  line-height: 1.46;
-  margin: 0;
-  max-width: 360px;
-}
-
-.sld-skeleton-grid {
-  display: grid;
-  gap: 10px;
-  margin-top: 8px;
-  width: 260px;
-}
-
-.sld-skeleton-grid span {
-  animation: skeleton-sheen 1.7s ease-in-out infinite;
-  background: linear-gradient(90deg, rgba(255,59,48,0.18), rgba(125,240,226,0.22), rgba(255,59,48,0.18));
-  background-size: 220% 100%;
-  border-radius: 999px;
-  display: block;
-  height: 6px;
-}
-
-.sld-skeleton-grid span:nth-child(2) { margin-left: 42px; width: 72%; }
-.sld-skeleton-grid span:nth-child(3) { margin-left: 8px; width: 88%; }
-
-.engineer-panel-skeleton {
-  background: rgba(5, 13, 12, 0.94);
-  border-top: 1px solid var(--m3-outline);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 1.1fr 1fr 0.8fr;
-  padding: 14px 18px;
-}
-
-@media (max-width: 820px) {
-  .startup-steps {
-    grid-template-columns: 1fr;
-  }
-
-  .engineer-panel-skeleton {
-    grid-template-columns: 1fr;
-  }
 }

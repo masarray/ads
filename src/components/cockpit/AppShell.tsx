@@ -18,12 +18,8 @@ import {
 import { ReasoningRail } from "./ReasoningRail";
 import { useAdsStore } from "../../lib/ads/store";
 
-const SldCanvas = lazy(() =>
-  import("../sld/SldCanvas").then((module) => ({ default: module.SldCanvas })),
-);
-const EngineerPanel = lazy(() =>
-  import("./EngineerPanel").then((module) => ({ default: module.EngineerPanel })),
-);
+import { SldCanvas } from "../sld/SldCanvas";
+import { EngineerPanel } from "./EngineerPanel";
 const EventLogView = lazy(() =>
   import("./EventLogView").then((module) => ({ default: module.EventLogView })),
 );
@@ -31,9 +27,10 @@ const SettingsView = lazy(() =>
   import("./SettingsView").then((module) => ({ default: module.SettingsView })),
 );
 const TrippingMatrixView = lazy(() =>
-  import("./TrippingMatrixView").then((module) => ({ default: module.TrippingMatrixView })),
+  import("./TrippingMatrixView").then((module) => ({
+    default: module.TrippingMatrixView,
+  })),
 );
-
 
 type AppView = "cockpit" | "settings" | "events" | "matrix";
 
@@ -44,10 +41,9 @@ const navItems: Array<{ id: AppView; label: string; icon: typeof GitFork }> = [
   { id: "matrix", label: "Matrix", icon: Grid3X3 },
 ];
 
-
 function StartupSplash() {
   return (
-    <main className="startup-splash" aria-label="Loading GridDefense ADS cockpit">
+    <main className="startup-splash" aria-label="Loading Mas Ari ADS cockpit">
       <div className="startup-orb" aria-hidden="true">
         <span />
         <span />
@@ -57,7 +53,7 @@ function StartupSplash() {
         <div className="startup-brand-row">
           <span className="startup-brand-mark">ADS</span>
           <div>
-            <h1>GridDefense ADS</h1>
+            <h1>Mas Ari ADS</h1>
             <p>Preparing smart defense scheme cockpit</p>
           </div>
         </div>
@@ -93,33 +89,6 @@ function ViewLoadingSkeleton({ title }: { title: string }) {
   );
 }
 
-function SldStartupSkeleton() {
-  return (
-    <section className="sld-stage sld-stage-skeleton" aria-label="Loading SLD">
-      <div className="sld-startup-card">
-        <span className="sld-startup-icon" aria-hidden="true" />
-        <h3>Loading Single Line Diagram</h3>
-        <p>Preparing topology, busbar state, Power Flow Lite and Trip Matrix overlays.</p>
-        <div className="sld-skeleton-grid" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function EngineerPanelSkeleton() {
-  return (
-    <section className="engineer-panel-skeleton" aria-label="Loading engineering panel">
-      <span />
-      <span />
-      <span />
-    </section>
-  );
-}
-
 const viewVariants = {
   initial: { opacity: 0, y: 16, scale: 0.985, filter: "blur(6px)" },
   animate: {
@@ -150,7 +119,9 @@ export function AppShell() {
   const reset = useAdsStore((state) => state.reset);
   const frequencyHz = useAdsStore((state) => state.frequencyHz);
   const runTimedScenario = useAdsStore((state) => state.runTimedScenario);
-  const runBlackstartSequence = useAdsStore((state) => state.runBlackstartSequence);
+  const runBlackstartSequence = useAdsStore(
+    (state) => state.runBlackstartSequence,
+  );
   const scenarioRun = useAdsStore((state) => state.scenarioRun);
 
   useEffect(() => {
@@ -629,28 +600,32 @@ export function AppShell() {
           {activeView === "cockpit" ? (
             <div className="workspace">
               <div className="main-column">
-                <Suspense fallback={<SldStartupSkeleton />}>
-                  <SldCanvas />
-                </Suspense>
-                <Suspense fallback={<EngineerPanelSkeleton />}>
-                  <EngineerPanel />
-                </Suspense>
+                <SldCanvas />
+                <EngineerPanel />
               </div>
               <ReasoningRail />
             </div>
           ) : null}
           {activeView === "settings" ? (
-            <Suspense fallback={<ViewLoadingSkeleton title="Loading cockpit settings" />}>
+            <Suspense
+              fallback={
+                <ViewLoadingSkeleton title="Loading cockpit settings" />
+              }
+            >
               <SettingsView />
             </Suspense>
           ) : null}
           {activeView === "events" ? (
-            <Suspense fallback={<ViewLoadingSkeleton title="Loading event log" />}>
+            <Suspense
+              fallback={<ViewLoadingSkeleton title="Loading event log" />}
+            >
               <EventLogView />
             </Suspense>
           ) : null}
           {activeView === "matrix" ? (
-            <Suspense fallback={<ViewLoadingSkeleton title="Loading trip matrix" />}>
+            <Suspense
+              fallback={<ViewLoadingSkeleton title="Loading trip matrix" />}
+            >
               <TrippingMatrixView />
             </Suspense>
           ) : null}
