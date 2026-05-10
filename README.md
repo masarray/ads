@@ -1,4 +1,4 @@
-# GridDefense ADS Simulator
+# Mas Ari ADS Simulator
 
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 ![Built with React](https://img.shields.io/badge/React-19-61dafb.svg)
@@ -10,12 +10,12 @@
 ## Demo Preview
 
 <p align="center">
-  <img src="./public/demo/demo.gif" alt="GridDefense ADS Simulator animated demo" width="100%" />
+  <img src="./public/demo/demo.gif" alt="Mas Ari ADS Simulator animated demo" width="100%" />
 </p>
 
 ## Overview
 
-**GridDefense ADS Simulator** is a personal open-source coding exploration for learning and teaching smart defense scheme logic based on fast power-flow-aware load shedding.
+**Mas Ari ADS Simulator** is a personal open-source coding exploration for learning and teaching smart defense scheme logic based on fast power-flow-aware load shedding.
 
 This demo explores a more explainable defense scheme concept using:
 
@@ -93,7 +93,7 @@ https://masarray.github.io/ads/
 The Vite base path is configured as:
 
 ```ts
-base: "/ads/"
+base: "/ads/";
 ```
 
 If the repository is renamed again, update `base` in `vite.config.ts` and the public URLs in `index.html` and this README.

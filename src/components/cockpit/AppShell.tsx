@@ -1,20 +1,4 @@
-/*
- * Adaptive Defense Scheme Simulator
- * Copyright (C) 2026 Ari Sulistiono
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 3 only,
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- *
- * See the LICENSE file for details.
- * SPDX-License-Identifier: GPL-3.0-only
- */
-
-import { useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
   AlertTriangle,
@@ -32,12 +16,24 @@ import {
   Zap,
 } from "lucide-react";
 import { ReasoningRail } from "./ReasoningRail";
-import { EngineerPanel } from "./EngineerPanel";
-import { EventLogView } from "./EventLogView";
-import { SettingsView } from "./SettingsView";
-import { TrippingMatrixView } from "./TrippingMatrixView";
-import { SldCanvas } from "../sld/SldCanvas";
 import { useAdsStore } from "../../lib/ads/store";
+
+const SldCanvas = lazy(() =>
+  import("../sld/SldCanvas").then((module) => ({ default: module.SldCanvas })),
+);
+const EngineerPanel = lazy(() =>
+  import("./EngineerPanel").then((module) => ({ default: module.EngineerPanel })),
+);
+const EventLogView = lazy(() =>
+  import("./EventLogView").then((module) => ({ default: module.EventLogView })),
+);
+const SettingsView = lazy(() =>
+  import("./SettingsView").then((module) => ({ default: module.SettingsView })),
+);
+const TrippingMatrixView = lazy(() =>
+  import("./TrippingMatrixView").then((module) => ({ default: module.TrippingMatrixView })),
+);
+
 
 type AppView = "cockpit" | "settings" | "events" | "matrix";
 
@@ -47,6 +43,82 @@ const navItems: Array<{ id: AppView; label: string; icon: typeof GitFork }> = [
   { id: "events", label: "Event Log", icon: ListChecks },
   { id: "matrix", label: "Matrix", icon: Grid3X3 },
 ];
+
+
+function StartupSplash() {
+  return (
+    <main className="startup-splash" aria-label="Loading GridDefense ADS cockpit">
+      <div className="startup-orb" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <section className="startup-card">
+        <div className="startup-brand-row">
+          <span className="startup-brand-mark">ADS</span>
+          <div>
+            <h1>GridDefense ADS</h1>
+            <p>Preparing smart defense scheme cockpit</p>
+          </div>
+        </div>
+        <div className="startup-progress" aria-hidden="true">
+          <span />
+        </div>
+        <div className="startup-steps">
+          <span>Loading SLD model</span>
+          <span>Preparing Power Flow Lite</span>
+          <span>Building Trip Matrix</span>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ViewLoadingSkeleton({ title }: { title: string }) {
+  return (
+    <section className="view-loading-skeleton" aria-label={title}>
+      <div className="view-loading-card">
+        <span className="skeleton-dot" aria-hidden="true" />
+        <div>
+          <h3>{title}</h3>
+          <p>Loading only when needed to keep the cockpit startup fast.</p>
+        </div>
+      </div>
+      <div className="skeleton-lines" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </section>
+  );
+}
+
+function SldStartupSkeleton() {
+  return (
+    <section className="sld-stage sld-stage-skeleton" aria-label="Loading SLD">
+      <div className="sld-startup-card">
+        <span className="sld-startup-icon" aria-hidden="true" />
+        <h3>Loading Single Line Diagram</h3>
+        <p>Preparing topology, busbar state, Power Flow Lite and Trip Matrix overlays.</p>
+        <div className="sld-skeleton-grid" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EngineerPanelSkeleton() {
+  return (
+    <section className="engineer-panel-skeleton" aria-label="Loading engineering panel">
+      <span />
+      <span />
+      <span />
+    </section>
+  );
+}
 
 const viewVariants = {
   initial: { opacity: 0, y: 16, scale: 0.985, filter: "blur(6px)" },
@@ -67,6 +139,7 @@ const viewVariants = {
 };
 
 export function AppShell() {
+  const [bootReady, setBootReady] = useState(false);
   const [activeView, setActiveView] = useState<AppView>("cockpit");
   const [draftFrequencyHz, setDraftFrequencyHz] = useState(48.25);
   const [frequencyOpen, setFrequencyOpen] = useState(false);
@@ -79,6 +152,13 @@ export function AppShell() {
   const runTimedScenario = useAdsStore((state) => state.runTimedScenario);
   const runBlackstartSequence = useAdsStore((state) => state.runBlackstartSequence);
   const scenarioRun = useAdsStore((state) => state.scenarioRun);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setBootReady(true), 760);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!bootReady) return <StartupSplash />;
 
   return (
     <main className="app-shell">
@@ -549,15 +629,31 @@ export function AppShell() {
           {activeView === "cockpit" ? (
             <div className="workspace">
               <div className="main-column">
-                <SldCanvas />
-                <EngineerPanel />
+                <Suspense fallback={<SldStartupSkeleton />}>
+                  <SldCanvas />
+                </Suspense>
+                <Suspense fallback={<EngineerPanelSkeleton />}>
+                  <EngineerPanel />
+                </Suspense>
               </div>
               <ReasoningRail />
             </div>
           ) : null}
-          {activeView === "settings" ? <SettingsView /> : null}
-          {activeView === "events" ? <EventLogView /> : null}
-          {activeView === "matrix" ? <TrippingMatrixView /> : null}
+          {activeView === "settings" ? (
+            <Suspense fallback={<ViewLoadingSkeleton title="Loading cockpit settings" />}>
+              <SettingsView />
+            </Suspense>
+          ) : null}
+          {activeView === "events" ? (
+            <Suspense fallback={<ViewLoadingSkeleton title="Loading event log" />}>
+              <EventLogView />
+            </Suspense>
+          ) : null}
+          {activeView === "matrix" ? (
+            <Suspense fallback={<ViewLoadingSkeleton title="Loading trip matrix" />}>
+              <TrippingMatrixView />
+            </Suspense>
+          ) : null}
         </motion.div>
       </AnimatePresence>
     </main>
