@@ -5,25 +5,35 @@ import {
   RouterProvider,
   createRootRoute,
   createRoute,
-  createRouter
+  createRouter,
 } from "@tanstack/react-router";
 import { AppShell } from "./components/cockpit/AppShell";
 import "./styles.css";
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />
+  component: () => <Outlet />,
 });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: AppShell
+  component: AppShell,
 });
 
 const routeTree = rootRoute.addChildren([indexRoute]);
+
+function getRouterBasepath() {
+  const baseUrl = import.meta.env.BASE_URL || "/";
+  const normalized = baseUrl.replace(/\/+$/, "");
+
+  // TanStack Router expects "/" for root, but "/ads" for GitHub Pages.
+  if (!normalized || normalized === ".") return "/";
+  return normalized;
+}
+
 const router = createRouter({
   routeTree,
-  basepath: import.meta.env.PROD ? "/grifdefense-ads-simulator" : "/"
+  basepath: getRouterBasepath(),
 });
 
 declare module "@tanstack/react-router" {
@@ -35,5 +45,5 @@ declare module "@tanstack/react-router" {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RouterProvider router={router} />
-  </StrictMode>
+  </StrictMode>,
 );
