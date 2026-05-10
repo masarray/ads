@@ -1,35 +1,29 @@
-# GPL-3 Patch Notes
+# Phase 22 Patch Notes — Rename Safe GitHub Pages `/ads/`
 
-Patch ini menambahkan fondasi lisensi open-source GPL-3.0-only untuk repository.
+Files included:
 
-## Files
+- `vite.config.ts`
+- `index.html`
+- `README.md`
 
-- `LICENSE` — teks resmi GNU GPL v3.
-- `README.md` — README edukatif + disclaimer independen.
-- `GPL3_SOURCE_HEADER.txt` — header lisensi untuk source file baru/utama.
-- `scripts/apply-gpl3-license-field.ps1` — patcher PowerShell untuk menambahkan `license` ke `package.json`.
-- `scripts/apply-gpl3-license-field.cjs` — patcher Node.js alternatif.
-- beberapa file source utama dari baseline stabil Phase 20A diberi header GPL.
+## What changed
 
-## Cara pakai aman
+1. Vite base path changed from `./` to `/ads/`.
+2. SEO, Open Graph, Twitter, canonical, and JSON-LD URLs now point to `https://masarray.github.io/ads/`.
+3. README now includes:
+   - Live Demo link
+   - Repository link
+   - animated demo GIF from `./public/demo/demo.gif`
+   - GPL-3.0-only license note
+   - GitHub Pages rename notes
 
-1. Copy `LICENSE` ke root repo.
-2. Copy/merge `README.md` ke root repo.
-3. Copy folder `scripts/` ke root repo.
-4. Jalankan salah satu:
+## Important checks before deploy
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\apply-gpl3-license-field.ps1
-```
-
-atau:
-
-```bash
-node scripts/apply-gpl3-license-field.cjs
-```
-
-5. Jika source file Mas sudah lebih baru dari patch ini, jangan replace file logic hanya untuk header. Cukup copy isi `GPL3_SOURCE_HEADER.txt` ke file utama secara manual.
-
-## Catatan
-
-Saya sengaja tidak membuat full replacement `package.json` karena file asli tidak tersedia di upload, agar dependencies dan scripts Mas tidak tertimpa.
+- Confirm the repository is renamed to `ads`.
+- Confirm `public/demo/demo.gif` exists in the repo.
+- Confirm `public/assets/SLD_ADS_HMI.svg` exists.
+- Run `pnpm build`.
+- After deploy, test:
+  - `https://masarray.github.io/ads/`
+  - `https://masarray.github.io/ads/demo/demo.gif`
+  - `https://masarray.github.io/ads/assets/SLD_ADS_HMI.svg`
