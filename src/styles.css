@@ -1,3 +1,10 @@
+/*
+ * Adaptive Defense Scheme Simulator
+ * Copyright (C) 2026 Ari Sulistiono
+ * SPDX-License-Identifier: GPL-3.0-only
+ * See the LICENSE file for details.
+ */
+
 @import "tailwindcss" source(none);
 @source "../src";
 
@@ -3613,4 +3620,135 @@ button {
   .logic-mini-metrics {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ============================================================
+   Phase 20A — Stable premium right rail + hover-only restoration advisory
+   ============================================================ */
+.side-rail-compact {
+  gap: 10px;
+}
+
+.manual-advisory-card {
+  position: relative;
+  overflow: hidden;
+  align-items: start;
+  background:
+    linear-gradient(135deg, rgba(125, 240, 226, 0.10), rgba(12, 24, 21, 0.90)),
+    radial-gradient(circle at 14% 0%, rgba(125, 240, 226, 0.18), transparent 38%);
+  border: 1px solid rgba(125, 240, 226, 0.26);
+  border-radius: var(--m3-shape-md);
+  box-shadow:
+    0 18px 42px -28px rgba(125, 240, 226, 0.80),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px 1fr;
+  padding: 12px;
+}
+
+.manual-advisory-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 0%, transparent 30%, rgba(255,255,255,.22) 45%, rgba(125,240,226,.36) 50%, transparent 65%, transparent 100%);
+  transform: translateX(-115%);
+  animation: rail-shine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes rail-shine {
+  0%, 45% { transform: translateX(-115%); opacity: 0; }
+  52% { opacity: 1; }
+  78%, 100% { transform: translateX(115%); opacity: 0; }
+}
+
+.manual-advisory-card--watch {
+  background:
+    linear-gradient(135deg, rgba(255, 205, 107, 0.12), rgba(12, 24, 21, 0.92)),
+    radial-gradient(circle at 16% 0%, rgba(255, 205, 107, 0.22), transparent 42%);
+  border-color: rgba(255, 205, 107, 0.38);
+  box-shadow: 0 18px 42px -28px rgba(255, 205, 107, 0.80);
+}
+
+.manual-advisory-card--blocked {
+  background:
+    linear-gradient(135deg, rgba(255, 107, 107, 0.13), rgba(12, 24, 21, 0.92)),
+    radial-gradient(circle at 16% 0%, rgba(255, 107, 107, 0.22), transparent 42%);
+  border-color: rgba(255, 107, 107, 0.42);
+  box-shadow: 0 18px 42px -28px rgba(255, 107, 107, 0.78);
+}
+
+.manual-advisory-icon {
+  align-items: center;
+  background: rgba(125, 240, 226, 0.12);
+  border: 1px solid rgba(125, 240, 226, 0.28);
+  border-radius: 999px;
+  color: var(--m3-primary);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.manual-advisory-card--watch .manual-advisory-icon {
+  background: rgba(255, 205, 107, 0.14);
+  border-color: rgba(255, 205, 107, 0.38);
+  color: var(--m3-amber);
+}
+
+.manual-advisory-card--blocked .manual-advisory-icon {
+  background: rgba(255, 107, 107, 0.13);
+  border-color: rgba(255, 107, 107, 0.42);
+  color: #ff9f9f;
+}
+
+.manual-advisory-card small {
+  color: var(--m3-primary);
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.manual-advisory-card h3 {
+  color: var(--m3-text);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  margin: 2px 0 4px;
+}
+
+.manual-advisory-card p {
+  color: var(--m3-muted);
+  font-size: 12.2px;
+  line-height: 1.42;
+  margin: 0;
+}
+
+.manual-advisory-compare {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 9px;
+}
+
+.manual-advisory-compare span {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(125, 240, 226, 0.12);
+  border-radius: 12px;
+  color: var(--m3-muted);
+  font-size: 10px;
+  padding: 7px 8px;
+}
+
+.manual-advisory-compare b {
+  color: var(--m3-primary);
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

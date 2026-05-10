@@ -1,47 +1,42 @@
-# Adaptive Defense Scheme ADS Simulator
+# Adaptive Defense Scheme Simulator
 
-Adaptive Defense Scheme Logic simulator for an operator-style HMI Single Line Diagram.
+**Adaptive Defense Scheme Simulator** is a personal open-source coding exploration for learning and teaching smart defense scheme logic based on fast power-flow-aware load shedding.
 
-The active app is a React + Vite web application with an interactive SVG SLD, ADS Logic reasoning panel, contingency hover preview, and live trip execution history.
+This demo explores a more explainable defense scheme concept using:
 
-## Run Locally
+- topology awareness,
+- Power Flow Lite calculation,
+- source-load balance,
+- island detection,
+- trip-matrix reasoning,
+- OLS / Overload Shedding,
+- OGS / Over Generation Shedding,
+- generator runback reasoning,
+- frequency injection scenarios,
+- and blackstart / restoration learning sequences.
 
-```bash
-corepack pnpm install
-corepack pnpm run dev
-```
+The goal is to demonstrate that defense scheme actions should be based on electrical reasoning — power direction, source availability, grid/IBT support, island balance, equipment loading, and final system impact — not only on a fixed static trip list.
 
-Open:
+## Learning and Teaching Use
 
-```txt
-http://127.0.0.1:5177/
-```
+This project can be used by engineers, students, trainers, educators, and power-system practitioners to learn and teach smart defense scheme concepts, especially fast power-flow-aware load shedding and explainable trip-matrix logic.
 
-## Build
+It is intended as an educational and exploratory simulator, not as a protection-grade or operational control system.
 
-```bash
-corepack pnpm run build
-```
+## Important Disclaimer
 
-The production output is written to `dist/`.
+This project is a personal, independent, open-source exploration.
 
-## GitHub Pages
+It is **not** a commercial product. It is **not** affiliated with, endorsed by, or representing any company, employer, utility, vendor, customer system, or project owner.
 
-The repository deploys the React app through `.github/workflows/pages.yml`.
-On every push to `main`, GitHub Actions builds the app and publishes `dist/`.
+No confidential customer data, utility data, employer data, or proprietary project information is intended to be included in this repository.
 
-Pages URL:
+## License
 
-```txt
-https://masarray.github.io/grifdefense-ads-simulator/
-```
+This project is released under the **GNU General Public License v3.0 only**.
 
-## Product Scope
+Copyright (C) 2026 Ari Sulistiono.
 
-- HMI-first Single Line Diagram using the transparent `SLD_ADS_HMI.svg` asset.
-- Red means ON/Close/energized; white means OFF/Open/dead.
-- Hover contingency CBs to preview smart ADS arming.
-- Click/open contingency CBs to execute ADS logic and trip selected load CBs.
-- Executed trips show orange `TRIPPED` chips on open CBs.
-- ADS Logic explains selected loads, rejected alternatives, overshed margin, CB operations, and affected electrical area.
-- Top command bar shows frequency injection, source, demand, reserve, and relief state.
+See the [`LICENSE`](./LICENSE) file for the full license text.
+
+SPDX-License-Identifier: GPL-3.0-only

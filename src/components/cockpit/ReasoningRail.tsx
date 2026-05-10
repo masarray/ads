@@ -1,3 +1,19 @@
+/*
+ * Adaptive Defense Scheme Simulator
+ * Copyright (C) 2026 Ari Sulistiono
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * See the LICENSE file for details.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 import {
   Activity,
   AlertTriangle,
@@ -25,11 +41,13 @@ export function ReasoningRail() {
     feeders,
     frequencyHz,
     scenarioRun,
+    manualAdvisory,
   } = useAdsStore();
 
   const displayDecision = hoverDecision ?? decision;
   const hasHover = Boolean(hoverDecision);
   const hasLiveDecision = !hoverDecision && decision.status !== "normal";
+  const hasManualAdvisory = Boolean(manualAdvisory && !hoverDecision);
   const hasDecisionView = Boolean(hoverDecision || hasLiveDecision);
   const isExecuted = displayDecision.status === "executed";
   const isBlocked = displayDecision.status === "blocked";
@@ -75,7 +93,9 @@ export function ReasoningRail() {
     ? "Contingency Preview"
     : scenarioRun?.active
       ? "Scenario Runner"
-      : hasLiveDecision
+      : hasManualAdvisory
+        ? "Manual Restoration"
+        : hasLiveDecision
         ? decision.mode ?? "Live ADS"
         : "Operator Guide";
 
@@ -83,7 +103,9 @@ export function ReasoningRail() {
     ? "Preview"
     : scenarioRun?.active
       ? `Step ${scenarioRun.step}/${scenarioRun.total}`
-      : isExecuted
+      : hasManualAdvisory
+        ? "Advisory"
+        : isExecuted
         ? "Executed"
         : isBlocked
           ? "Blocked"
@@ -112,6 +134,25 @@ export function ReasoningRail() {
             <small>{scenarioRun.active ? "Running sequence" : "Last sequence"}</small>
             <h3>{scenarioRun.title}</h3>
             <p>{scenarioRun.message}</p>
+          </div>
+        </section>
+      ) : null}
+
+      {manualAdvisory && !hoverDecision ? (
+        <section className={`manual-advisory-card logic-animated manual-advisory-card--${manualAdvisory.verdict}`}>
+          <div className="manual-advisory-icon">
+            {manualAdvisory.verdict === "safe" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+          </div>
+          <div>
+            <small>{manualAdvisory.verdict === "blocked" ? "Restoration warning" : "Manual restoration advisory"}</small>
+            <h3>{manualAdvisory.targetName}</h3>
+            <p>{manualAdvisory.message}</p>
+            {(manualAdvisory.before || manualAdvisory.after) ? (
+              <div className="manual-advisory-compare">
+                <span>Now <b>{manualAdvisory.before ?? "-"}</b></span>
+                <span>After close <b>{manualAdvisory.after ?? "-"}</b></span>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -188,7 +229,7 @@ export function ReasoningRail() {
           <div>
             <MousePointer2 size={15} />
             <p>
-              Hover = preview only. Click = execute selected Trip Matrix row. Blackstart = timed operator sequence using real CB actions.
+              Hover contingency CB = Trip Matrix preview. Hover open load = restoration advisory. Click load = manual operation only.
             </p>
           </div>
         </section>
@@ -211,7 +252,7 @@ export function ReasoningRail() {
       <section className="logic-footer logic-footer-compact">
         <span>Freq <b>{frequencyHz.toFixed(2)} Hz</b></span>
         <span>Load <b>{totalLoad} MW</b></span>
-        <span>Constraint <b>{hasDecisionView ? displayDecision.constraint : "Waiting hover"}</b></span>
+        <span>Constraint <b>{hasManualAdvisory ? manualAdvisory?.verdict : hasDecisionView ? displayDecision.constraint : "Waiting hover"}</b></span>
       </section>
     </aside>
   );

@@ -1,6 +1,7 @@
 {
   "name": "smart-ads-simulator",
   "private": true,
+  "license": "GPL-3.0-only",
   "type": "module",
   "packageManager": "pnpm@10.23.0",
   "scripts": {

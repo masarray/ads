@@ -1,3 +1,19 @@
+/*
+ * Adaptive Defense Scheme Simulator
+ * Copyright (C) 2026 Ari Sulistiono
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * See the LICENSE file for details.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 import { useRef, useState } from "react";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {

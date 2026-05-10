@@ -1,3 +1,19 @@
+/*
+ * Adaptive Defense Scheme Simulator
+ * Copyright (C) 2026 Ari Sulistiono
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * See the LICENSE file for details.
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 import { create } from "zustand";
 import { initialFeeders } from "./initialSystem";
 import { previewToggleWithEvaluator } from "./evaluator";
@@ -11,6 +27,17 @@ type ScenarioRunState = {
   step: number;
   total: number;
   message: string;
+};
+
+type ManualAdvisory = {
+  targetId: string;
+  targetName: string;
+  verdict: "safe" | "watch" | "blocked";
+  title: string;
+  message: string;
+  before?: string;
+  after?: string;
+  event: string;
 };
 
 interface AdsStore {
@@ -27,6 +54,7 @@ interface AdsStore {
   decision: AdsDecision;
   hoverDecision: AdsDecision | null;
   hoverObjectId: string | null;
+  manualAdvisory: ManualAdvisory | null;
   eventLog: string[];
   activeContingencyId: string | null;
   scenarioRun: ScenarioRunState | null;
@@ -95,6 +123,113 @@ const sequenceDelayMs = 800;
 
 function wait(ms = sequenceDelayMs): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function formatLoadingPct(value: number): string {
+  if (!Number.isFinite(value)) return "∞";
+  return `${Math.round(value * 10) / 10}%`;
+}
+
+function forecastManualRestorationAdvisory(
+  objectId: string,
+  feeders: Feeder[],
+  objectStates: Record<string, BreakerState>,
+  contingencyRules: Record<string, ContingencyRule>,
+  sourceMw: number,
+  minReserveMw: number,
+  frequencyHz: number,
+): ManualAdvisory | null {
+  const target = feeders.find((feeder) => feeder.id === objectId);
+  if (!target) return null;
+
+  // Advisory is only for restoration: "this feeder is open; is it safe to close it?"
+  if (target.breakerState !== "open") return null;
+
+  const bus = feederBusbar(target);
+  const energizedMap = calculateBusbarEnergized(objectStates);
+  if (!energizedMap[bus]) {
+    return {
+      targetId: target.id,
+      targetName: target.name,
+      verdict: "blocked",
+      title: "Manual restoration check",
+      message: `Do not close ${target.name} yet. Bus ${bus} is dead; energize source/tie first, then pick up the feeder.`,
+      before: "Bus dead",
+      after: "Close not recommended",
+      event: `Manual restoration advisory: ${target.id} is on dead Bus ${bus}.`,
+    };
+  }
+
+  const liveMatrix = buildMatrix(
+    feeders,
+    objectStates,
+    contingencyRules,
+    sourceMw,
+    minReserveMw,
+    frequencyHz,
+  );
+  const liveWorst = [...(liveMatrix.powerFlow?.branches ?? [])]
+    .filter((branch) => branch.status === "closed")
+    .sort((a, b) => b.loadingPct - a.loadingPct)[0];
+
+  const forecastFeeders = feeders.map((feeder) =>
+    feeder.id === objectId ? { ...feeder, breakerState: "closed" as BreakerState } : feeder,
+  );
+  const forecastStates = {
+    ...objectStates,
+    [objectId]: "closed" as BreakerState,
+    ...Object.fromEntries(forecastFeeders.map((feeder) => [feeder.id, feeder.breakerState])),
+  };
+  const forecastMatrix = buildMatrix(
+    forecastFeeders,
+    forecastStates,
+    contingencyRules,
+    sourceMw,
+    minReserveMw,
+    frequencyHz,
+  );
+
+  const critical = forecastMatrix.powerFlow?.overloadedBranches?.[0];
+  if (critical) {
+    return {
+      targetId: target.id,
+      targetName: target.name,
+      verdict: "blocked",
+      title: "Manual restoration check",
+      message: `Closing ${target.name} may overload ${critical.branchId}: ${formatLoadingPct(critical.loadingPct)} (${Math.round(critical.absFlowMw)} MW). Add source, use alternate path, or pick up smaller load first.`,
+      before: liveWorst ? `${liveWorst.branchId} ${formatLoadingPct(liveWorst.loadingPct)}` : "No active branch",
+      after: `${critical.branchId} ${formatLoadingPct(critical.loadingPct)}`,
+      event: `Manual restoration advisory: ${target.id} would overload ${critical.branchId} at ${formatLoadingPct(critical.loadingPct)}.`,
+    };
+  }
+
+  const watch = [...(forecastMatrix.powerFlow?.branches ?? [])]
+    .filter((branch) => branch.status === "closed")
+    .sort((a, b) => b.loadingPct - a.loadingPct)[0];
+
+  if (watch && watch.loadingPct >= 85) {
+    return {
+      targetId: target.id,
+      targetName: target.name,
+      verdict: "watch",
+      title: "Manual restoration check",
+      message: `Closing ${target.name} is possible, but ${watch.branchId} will operate above the preferred 85% band: ${formatLoadingPct(watch.loadingPct)}. ADS action is not required below 110%.`,
+      before: liveWorst ? `${liveWorst.branchId} ${formatLoadingPct(liveWorst.loadingPct)}` : "No active branch",
+      after: `${watch.branchId} ${formatLoadingPct(watch.loadingPct)}`,
+      event: `Manual restoration advisory: ${target.id} is watch; ${watch.branchId} forecast ${formatLoadingPct(watch.loadingPct)}.`,
+    };
+  }
+
+  return {
+    targetId: target.id,
+    targetName: target.name,
+    verdict: "safe",
+    title: "Manual restoration check",
+    message: `Closing ${target.name} looks safe. PowerFlowLite does not forecast branch overload or operation above the preferred 85% band.`,
+    before: liveWorst ? `${liveWorst.branchId} ${formatLoadingPct(liveWorst.loadingPct)}` : "No active branch",
+    after: watch ? `${watch.branchId} ${formatLoadingPct(watch.loadingPct)}` : "No active branch",
+    event: `Manual restoration advisory: ${target.id} safe to close.`,
+  };
 }
 
 function scenarioTitle(kind: ScenarioKind): string {
@@ -594,6 +729,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
   decision: initialTripMatrix.baseDecision,
   hoverDecision: null,
   hoverObjectId: null,
+  manualAdvisory: null,
   eventLog: [],
   activeContingencyId: null,
   scenarioRun: null,
@@ -613,6 +749,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       decision: tripMatrix.baseDecision,
       hoverDecision: null,
       hoverObjectId: null,
+      manualAdvisory: null,
       eventLog: ["System reset. All controllable breakers closed."],
       activeContingencyId: null,
       scenarioRun: null
@@ -1144,44 +1281,70 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       }));
     } else if (kind === "frequency_islanding") {
       frequencyHz = value ?? 48.25;
-      const zone = frequencyHz <= 48.3
-        ? "Islanding frequency zone"
-        : frequencyHz < 49
-          ? "UFLS coordination zone"
-          : "Normal frequency zone";
-      requiredReliefMw = frequencyHz <= 48.3 ? 96 : frequencyHz < 49 ? 54 : 0;
+      const isOverFrequency = frequencyHz >= 50.8;
+      const zone = isOverFrequency
+        ? "Over-frequency / 81O watch"
+        : frequencyHz <= 48.3
+          ? "Islanding frequency zone"
+          : frequencyHz < 49
+            ? "UFLS coordination zone"
+            : "Normal frequency zone";
+      requiredReliefMw = isOverFrequency ? 0 : frequencyHz <= 48.3 ? 96 : frequencyHz < 49 ? 54 : 0;
       events.push(`Frequency injection: ${frequencyHz.toFixed(2)} Hz, ${zone}.`);
       decision = executeLoadDecision(rankShedding(feeders, requiredReliefMw, {
-        title: "Frequency Injection",
-        mode: "PARAMETER-BASED ISLAND ADS",
+        title: isOverFrequency ? "Over Frequency / ANSI 81O Watch" : "Frequency Injection",
+        mode: isOverFrequency ? "OVER-FREQUENCY ADVISORY" : "PARAMETER-BASED ISLAND ADS",
         constraint: zone,
         affectedBuses: ["A", "B", "C"],
-        actionType: "ISLAND_BALANCING",
+        actionType: isOverFrequency ? "OGS_GENERATOR_SHEDDING" : "ISLAND_BALANCING",
         scenarioKind: "frequency_islanding",
         frequencyHz,
         frequencyZone: zone,
-        imbalanceBasis: frequencyHz <= 48.3
-          ? "Frekuensi islanding berarti pembangkitan tidak cukup mengikuti beban aktual."
-          : "Frekuensi berada di zona UFLS, ADS menyiapkan relief koordinasi.",
-        imbalanceFormula: requiredReliefMw > 0
-          ? `Required action = frequency-stage target ${requiredReliefMw} MW`
-          : "Required action = 0 MW, frequency normal",
-        detectedCondition: `${frequencyHz.toFixed(2)} Hz detected. ADS checks UFLS coordination and island arming target.`,
-        operatorMessage: frequencyHz <= 48.3
-          ? "Frekuensi sudah masuk zona islanding. ADS tidak memakai target lama; beban yang masih closed dihitung ulang sebelum arming/trip."
-          : "Frekuensi masih di zona koordinasi UFLS. ADS menyiapkan target dan menunggu batas islanding.",
-        steps: [
-          "Membaca frekuensi aktual dari injection.",
-          "Mengklasifikasikan zona normal, UFLS, atau islanding.",
-          "Mengabaikan load yang sudah open/trip dari kandidat baru.",
-          "Menghitung target island balancing terbaru."
-        ],
-        passCriteria: [
-          "Zona UFLS/islanding dikenali.",
-          "Target lama tidak dipakai setelah load berubah.",
-          "Balance island diarahkan ke kisaran 95-105% beban."
-        ],
-        explanation: "Frequency Injection adalah event parameter-based. ADS membaca penurunan frekuensi, mengoordinasikan UFLS, lalu menyiapkan island operation saat mendekati 48.3 Hz."
+        imbalanceBasis: isOverFrequency
+          ? "51 Hz indicates generation surplus / load rejection. Load shedding is inhibited because it can make frequency rise further."
+          : frequencyHz <= 48.3
+            ? "Frekuensi islanding berarti pembangkitan tidak cukup mengikuti beban aktual."
+            : "Frekuensi berada di zona UFLS, ADS menyiapkan relief koordinasi.",
+        imbalanceFormula: isOverFrequency
+          ? "OF logic = no load shedding. Check generator runback, OGS balance, and ANSI 81O trip risk if frequency persists."
+          : requiredReliefMw > 0
+            ? `Required action = frequency-stage target ${requiredReliefMw} MW`
+            : "Required action = 0 MW, frequency normal",
+        detectedCondition: isOverFrequency
+          ? `${frequencyHz.toFixed(2)} Hz over-frequency detected. ADS changes from UFLS thinking to generation reduction / OGS reasoning.`
+          : `${frequencyHz.toFixed(2)} Hz detected. ADS checks UFLS coordination and island arming target.`,
+        operatorMessage: isOverFrequency
+          ? "Over-frequency is a generation-surplus condition. No load shedding. Use generator runback / OGS evaluation; ANSI 81O may trip generator if frequency persists."
+          : frequencyHz <= 48.3
+            ? "Frekuensi sudah masuk zona islanding. ADS tidak memakai target lama; beban yang masih closed dihitung ulang sebelum arming/trip."
+            : "Frekuensi masih di zona koordinasi UFLS. ADS menyiapkan target dan menunggu batas islanding.",
+        steps: isOverFrequency
+          ? [
+              "Classify frequency as over-frequency, not UFLS.",
+              "Inhibit load shedding because shedding load can worsen 51 Hz.",
+              "Check island Pgen/Pload and generator runback/OGS requirement.",
+              "Warn about ANSI 81O trip risk if over-frequency persists."
+            ]
+          : [
+              "Membaca frekuensi aktual dari injection.",
+              "Mengklasifikasikan zona normal, UFLS, atau islanding.",
+              "Mengabaikan load yang sudah open/trip dari kandidat baru.",
+              "Menghitung target island balancing terbaru."
+            ],
+        passCriteria: isOverFrequency
+          ? [
+              "No load shedding at 51 Hz.",
+              "Generator reduction/runback is preferred.",
+              "OF relay risk is communicated clearly."
+            ]
+          : [
+              "Zona UFLS/islanding dikenali.",
+              "Target lama tidak dipakai setelah load berubah.",
+              "Balance island diarahkan ke kisaran 95-105% beban."
+            ],
+        explanation: isOverFrequency
+          ? "51 Hz is an over-frequency condition. The smart ADS response is generator reduction / OGS reasoning or OF protection awareness, not load shedding."
+          : "Frequency Injection adalah event parameter-based. ADS membaca penurunan frekuensi, mengoordinasikan UFLS, lalu menyiapkan island operation saat mendekati 48.3 Hz."
       }));
     } else if (kind === "ols_overload") {
       requiredReliefMw = 124;
@@ -1394,6 +1557,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
         ...matrixState(tripMatrix),
         decision: tripMatrix.baseDecision,
         hoverDecision: hoverRow?.snapshotHash === tripMatrix.snapshotHash ? hoverRow.decision : null,
+        manualAdvisory: null,
         activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
         eventLog: [`Manual load toggle: ${objectId} ${nextState}.`, ...isolated.events, ...currentStore.eventLog].slice(0, 120),
       });
@@ -1472,6 +1636,7 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
       // Executed/hover preview is not latched here; hover uses hoverDecision only.
       decision: tripMatrix.baseDecision,
       hoverDecision: null,
+      manualAdvisory: null,
       activeContingencyId: Object.keys(objectStates).find((id) => isContingencyObject(id, rules) && objectStates[id] === "open") ?? null,
       eventLog: eventItems.length
         ? [...eventItems, ...currentStore.eventLog].slice(0, 120)
@@ -1484,19 +1649,42 @@ export const useAdsStore = create<AdsStore>((set, get) => ({
     // Hover is a pure Trip Matrix preview. It never reads PowerFlowLite directly,
     // never uses legacy evaluator fallback, and never latches a live/base row.
     if (!hoverObjectId) {
-      set({ hoverObjectId: null, hoverDecision: null });
+      set({ hoverObjectId: null, hoverDecision: null, manualAdvisory: null });
       return;
     }
 
-    const matrix = get().tripMatrix;
+    const state = get();
+    const targetLoad = state.feeders.find((feeder) => feeder.id === hoverObjectId);
+
+    if (targetLoad) {
+      const manualAdvisory = forecastManualRestorationAdvisory(
+        hoverObjectId,
+        state.feeders,
+        state.objectStates,
+        state.contingencyRules,
+        state.sourceMw,
+        state.minReserveMw,
+        state.frequencyHz,
+      );
+
+      set({
+        hoverObjectId,
+        hoverDecision: null,
+        manualAdvisory,
+      });
+      return;
+    }
+
+    const matrix = state.tripMatrix;
     const matrixRow = matrix.rows[hoverObjectId];
     debugTripMatrixContext("HOVER PREVIEW ROW", matrixRow, matrix);
     const matrixDecision =
-      matrixRow?.snapshotHash === get().snapshotHash ? matrixRow.decision : null;
+      matrixRow?.snapshotHash === state.snapshotHash ? matrixRow.decision : null;
 
     set({
       hoverObjectId,
       hoverDecision: matrixDecision,
+      manualAdvisory: null,
     });
   }
 
