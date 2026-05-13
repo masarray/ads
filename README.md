@@ -15,7 +15,8 @@
 
 ## Overview
 
-**Mas Ari ADS Simulator** is a personal open-source coding exploration for learning and teaching smart defense scheme logic based on fast power-flow-aware load shedding.
+**Mas Ari ADS Simulator** is a personal open-source coding exploration for learning and teaching smart defense scheme
+logic based on fast power-flow-aware load shedding.
 
 This demo explores a more explainable defense scheme concept using:
 
@@ -30,11 +31,14 @@ This demo explores a more explainable defense scheme concept using:
 - frequency injection scenarios,
 - and blackstart / restoration learning sequences.
 
-The goal is to demonstrate that defense scheme actions should be based on electrical reasoning — power direction, source availability, grid/IBT support, island balance, equipment loading, and final system impact — not only on a fixed static trip list.
+The goal is to demonstrate that defense scheme actions should be based on electrical reasoning — power direction, source
+availability, grid/IBT support, island balance, equipment loading, and final system impact — not only on a fixed static
+trip list.
 
 ## Learning and Teaching Use
 
-This project can be used by engineers, students, trainers, educators, and power-system practitioners to learn and teach smart defense scheme concepts, especially fast power-flow-aware load shedding and explainable trip-matrix logic.
+This project can be used by engineers, students, trainers, educators, and power-system practitioners to learn and teach
+smart defense scheme concepts, especially fast power-flow-aware load shedding and explainable trip-matrix logic.
 
 It is intended as an educational and exploratory simulator, not as a protection-grade or operational control system.
 
@@ -52,9 +56,11 @@ It is intended as an educational and exploratory simulator, not as a protection-
 
 This project is a personal, independent, open-source exploration.
 
-It is **not** a commercial product. It is **not** affiliated with, endorsed by, or representing any company, employer, utility, vendor, customer system, or project owner.
+It is **not** a commercial product. It is **not** affiliated with, endorsed by, or representing any company, employer,
+utility, vendor, customer system, or project owner.
 
-No confidential customer data, utility data, employer data, or proprietary project information is intended to be included in this repository.
+No confidential customer data, utility data, employer data, or proprietary project information is intended to be
+included in this repository.
 
 ## Development
 
@@ -82,6 +88,21 @@ Preview the production build:
 pnpm preview
 ```
 
+### Docker development environment:
+
+Create `.env` file with:
+
+```text
+PORT=<PORT_NUMBER>
+```
+
+Then build and run the Docker container:
+
+```bash
+docker compose build
+docker compose up -d
+```
+
 ## GitHub Pages Notes
 
 This repository is intended to be published as:
@@ -96,7 +117,8 @@ The Vite base path is configured as:
 base: "/ads/";
 ```
 
-If the repository is renamed again, update `base` in `vite.config.ts` and the public URLs in `index.html` and this README.
+If the repository is renamed again, update `base` in `vite.config.ts` and the public URLs in `index.html` and this
+README.
 
 ## License
 
