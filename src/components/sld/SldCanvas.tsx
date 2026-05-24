@@ -544,6 +544,24 @@ export function SldCanvas() {
       powerFlowOverlay.appendChild(halo);
     };
 
+
+    const appendNormalGlowHalo = (
+      source: SVGGraphicsElement,
+      options: {
+        directionLabel: string;
+        flowMw: number;
+        classes: string[];
+      },
+    ) => {
+      const halo = source.cloneNode(false) as SVGGraphicsElement;
+      stripRuntimeSvgAttributes(halo);
+      halo.classList.add("flow-glow-halo");
+      halo.classList.add(...options.classes);
+      halo.setAttribute("data-flow-direction", options.directionLabel);
+      halo.setAttribute("data-flow-mw", String(options.flowMw));
+      powerFlowOverlay.appendChild(halo);
+    };
+
     const visualPowerFlow = previewPowerFlow ?? currentPowerFlow;
 
     const appendUnifiedFlowClone = (
@@ -564,6 +582,12 @@ export function SldCanvas() {
 
       if (options.overloaded) {
         appendOverloadHalo(node, {
+          directionLabel: options.directionLabel,
+          flowMw: options.flowMw,
+          classes: options.classes,
+        });
+      } else {
+        appendNormalGlowHalo(node, {
           directionLabel: options.directionLabel,
           flowMw: options.flowMw,
           classes: options.classes,
@@ -613,6 +637,28 @@ export function SldCanvas() {
       const arrowHeadReserve = Math.min(18, Math.max(10, box.height * 0.12));
       const y1 = top;
       const y2 = bottom - arrowHeadReserve;
+
+      if (options.overloaded) {
+        const halo = document.createElementNS(svgNamespace, "line");
+        halo.setAttribute("x1", String(x));
+        halo.setAttribute("x2", String(x));
+        halo.setAttribute("y1", String(y1));
+        halo.setAttribute("y2", String(y2));
+        halo.classList.add(...options.classes, "load-flow-line-overlay", "overload-flow-halo");
+        halo.setAttribute("data-flow-direction", options.directionLabel);
+        halo.setAttribute("data-flow-mw", String(options.flowMw));
+        powerFlowOverlay.appendChild(halo);
+      } else {
+        const halo = document.createElementNS(svgNamespace, "line");
+        halo.setAttribute("x1", String(x));
+        halo.setAttribute("x2", String(x));
+        halo.setAttribute("y1", String(y1));
+        halo.setAttribute("y2", String(y2));
+        halo.classList.add(...options.classes, "load-flow-line-overlay", "flow-glow-halo");
+        halo.setAttribute("data-flow-direction", options.directionLabel);
+        halo.setAttribute("data-flow-mw", String(options.flowMw));
+        powerFlowOverlay.appendChild(halo);
+      }
 
       const line = document.createElementNS(svgNamespace, "line");
       line.setAttribute("x1", String(x));

@@ -388,7 +388,14 @@ function buildTerminalFlows(
       directionLabel,
       capacityMw,
       loadingPct,
-      isOverloaded: status === "closed" && capacityMw > epsilonMw && loadingPct >= 100,
+      // Treat generator / grid terminal overload as a true over-capacity condition,
+      // not merely 100% utilisation. At exactly rated output the terminal is fully
+      // loaded but should not flash as overload. A small tolerance avoids UI churn
+      // from rounding (e.g. 165/165 MW displaying as overload).
+      isOverloaded:
+        status === "closed" &&
+        capacityMw > epsilonMw &&
+        Math.abs(flowMw) > capacityMw + 0.5,
     };
   });
 
