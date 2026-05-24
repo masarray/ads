@@ -2669,6 +2669,129 @@ button {
   cursor: pointer;
 }
 
+/* Animated power-flow pulse for the imported SVG SLD.
+   v12 rule:
+   - busbar remains solid state color only; never animated
+   - every non-busbar flow uses one slim bright moving highlight
+   - overloaded line / generator / IBT also gets a steady orange outer halo
+   - overlay is above the red conductor, while CB and busbar are raised in front
+*/
+.sld-canvas .ads-sld-svg .ads-power-flow-layer,
+.sld-canvas .ads-sld-svg .ads-terminal-flow-layer {
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.sld-canvas .ads-sld-svg .power-flow-overlay,
+.sld-canvas .ads-sld-svg .flow-live,
+.sld-canvas .ads-sld-svg .branch-flow-overlay,
+.sld-canvas .ads-sld-svg .terminal-flow-overlay,
+.sld-canvas .ads-sld-svg .generator-flow-overlay,
+.sld-canvas .ads-sld-svg .ibt-flow-overlay,
+.sld-canvas .ads-sld-svg .bus-coupler-flow-overlay,
+.sld-canvas .ads-sld-svg .line-flow-overlay,
+.sld-canvas .ads-sld-svg .load-flow-overlay,
+.sld-canvas .ads-sld-svg .load-flow-line-overlay {
+  fill: none !important;
+  stroke: #ffe1e7 !important;
+  stroke-width: 2.45px !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  stroke-dasharray: 2 13 !important;
+  stroke-dashoffset: 0;
+  opacity: 0.98;
+  vector-effect: non-scaling-stroke;
+  animation: ads-power-flow-dash var(--ads-flow-duration, 560ms) linear infinite;
+  filter: drop-shadow(0 0 2.5px rgba(255, 98, 120, 0.82))
+    drop-shadow(0 0 7px rgba(255, 98, 120, 0.28));
+}
+
+.sld-canvas .ads-sld-svg path.power-flow-overlay,
+.sld-canvas .ads-sld-svg path.terminal-flow-overlay,
+.sld-canvas .ads-sld-svg path.load-flow-overlay,
+.sld-canvas .ads-sld-svg path.generator-flow-overlay,
+.sld-canvas .ads-sld-svg line.power-flow-overlay,
+.sld-canvas .ads-sld-svg line.terminal-flow-overlay,
+.sld-canvas .ads-sld-svg line.load-flow-line-overlay {
+  fill: none !important;
+}
+
+.sld-canvas .ads-sld-svg .flow-live.flow-reverse {
+  animation-name: ads-power-flow-dash-reverse;
+}
+
+.sld-canvas .ads-sld-svg .flow-live.flow-overload,
+.sld-canvas .ads-sld-svg .overload-flow-overlay {
+  stroke: #ffe7b8 !important;
+  stroke-width: 2.75px !important;
+  stroke-dasharray: 3 11 !important;
+  opacity: 1;
+  filter: drop-shadow(0 0 2.8px rgba(255, 176, 68, 0.86))
+    drop-shadow(0 0 8px rgba(255, 176, 68, 0.3));
+}
+
+/* v12 overload emphasis: a steady orange outer halo behind the moving dash.
+   Applied only to line / bus-coupler / generator / IBT flow overlays, not to
+   busbars and not to normal load feeders. */
+.sld-canvas .ads-sld-svg .overload-flow-halo {
+  pointer-events: none !important;
+  fill: none !important;
+  stroke: rgba(255, 154, 35, 0.72) !important;
+  stroke-width: 8.5px !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  stroke-dasharray: none !important;
+  stroke-dashoffset: 0 !important;
+  opacity: 0.92;
+  vector-effect: non-scaling-stroke;
+  animation: none !important;
+  filter: drop-shadow(0 0 4px rgba(255, 183, 77, 0.88))
+    drop-shadow(0 0 10px rgba(255, 145, 0, 0.52))
+    drop-shadow(0 0 18px rgba(255, 111, 0, 0.24));
+}
+
+.sld-canvas .ads-sld-svg line.overload-flow-halo,
+.sld-canvas .ads-sld-svg path.overload-flow-halo,
+.sld-canvas .ads-sld-svg polyline.overload-flow-halo,
+.sld-canvas .ads-sld-svg polygon.overload-flow-halo {
+  fill: none !important;
+}
+
+
+.sld-canvas .ads-sld-svg [data-role="open-close"],
+.sld-canvas .ads-sld-svg [data-role="open-close"]:focus,
+.sld-canvas .ads-sld-svg [data-role="open-close"]:focus-visible,
+.sld-canvas .ads-sld-svg *:focus,
+.sld-canvas .ads-sld-svg *:focus-visible {
+  outline: none !important;
+}
+
+.sld-canvas .ads-sld-svg .hit-target {
+  fill: transparent !important;
+  stroke: none !important;
+}
+
+.sld-canvas .ads-sld-svg .busbar.busbar-dead,
+.sld-canvas .ads-sld-svg .feeder-off,
+.sld-canvas .ads-sld-svg .svg-open,
+.sld-canvas .ads-sld-svg .svg-tripped {
+  animation: none !important;
+  stroke-dasharray: none !important;
+  stroke-dashoffset: 0 !important;
+}
+
+@keyframes ads-power-flow-dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+@keyframes ads-power-flow-dash-reverse {
+  to {
+    stroke-dashoffset: 40;
+  }
+}
+
 .sld-canvas [data-role="open-close"]:hover .cb-body {
   filter: drop-shadow(0 0 3px rgba(219, 255, 251, 0.95))
     drop-shadow(0 0 14px rgba(125, 240, 226, 0.7));

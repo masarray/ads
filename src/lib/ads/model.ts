@@ -128,9 +128,23 @@ export interface BranchFlowResult {
   directionLabel: string;
 }
 
+export interface TerminalFlowResult {
+  objectId: string;
+  kind: "load" | "generator" | "grid";
+  bus: DcBusId;
+  status: "closed" | "open";
+  flowMw: number;
+  absFlowMw: number;
+  directionLabel: string;
+  capacityMw?: number;
+  loadingPct?: number;
+  isOverloaded?: boolean;
+}
+
 export interface PowerFlowLiteResult {
   buses: Array<{ id: DcBusId; pInjectionMw: number; angleRad: number; islandId: string }>;
   branches: BranchFlowResult[];
+  terminalFlows: TerminalFlowResult[];
   overloadedBranches: BranchFlowResult[];
   slackByIsland: Record<string, DcBusId>;
   warnings: string[];

@@ -215,6 +215,65 @@ const branchLabelMap: Record<string, string> = {
   IBT_C: "IBT C",
 };
 
+// SVG elements that should visually pulse when PowerFlowLite reports live MW.
+// This is intentionally separate from feederElementMap because transformer symbols
+// and load arrows should stay readable; the moving dash belongs on the conductor.
+const branchFlowElementMap: Record<string, string[]> = {
+  IBT_A: ["Line 5"],
+  LINE_AB: ["LINE_AB"],
+  LINE_COUPLER: ["LINE_COUPLER"],
+  LINE_BC: ["LINE_BC"],
+  LINE_AC: ["LINE_AC"],
+  IBT_C: ["LIBTA"],
+};
+
+// The SVG path direction is not always the same as the electrical template
+// direction. These flags keep animated dash movement aligned with the solved
+// PowerFlowLite direction, not with how the artwork was manually drawn.
+const branchSvgPathMatchesTemplateDirection: Record<string, boolean> = {
+  IBT_A: true,
+  LINE_AB: false,
+  LINE_COUPLER: true,
+  LINE_BC: false,
+  LINE_AC: true,
+  IBT_C: true,
+};
+
+const sourceCapacityByObject: Record<string, number> = {
+  IBT_A: 100,
+  IBT_C: 250,
+  GEN_A1: 180,
+  GEN_A2: 135,
+  GEN_C1: 165,
+  GEN_C2: 145,
+};
+
+const terminalFlowElementMap: Record<string, string[]> = {
+  IBT_A: ["Line 5"],
+  IBT_C: ["LIBTA"],
+  GEN_A1: ["Line 6"],
+  GEN_A2: ["Line 6_4"],
+  GEN_C1: ["Line 6_2"],
+  GEN_C2: ["Line 6_3"],
+  LOAD_A1: ["Arrow 3"],
+  LOAD_A2: ["Arrow 4"],
+  LOAD_A3: ["Arrow 5"],
+  LOAD_A4: ["Arrow 6"],
+  LOAD_A5: ["Arrow 7"],
+  LOAD_B1: ["Arrow 13"],
+  LOAD_B3: ["Arrow 14"],
+  LOAD_B4: ["Arrow 15"],
+  LOAD_B5: ["Arrow 16"],
+  LOAD_B2: ["Arrow 17"],
+  LOAD_C4: ["Arrow 8"],
+  LOAD_C3: ["Arrow 9"],
+  LOAD_C1: ["Arrow 10"],
+  LOAD_C2: ["Arrow 11"],
+  LOAD_C5: ["Arrow 12"],
+};
+
+const svgNamespace = "http://www.w3.org/2000/svg";
+
 function formatMw(value: number): string {
   if (!Number.isFinite(value)) return "∞";
   const rounded = Math.abs(value) < 0.05 ? 0 : Math.round(value * 10) / 10;
@@ -316,6 +375,24 @@ export function SldCanvas() {
       ),
     [previewPowerFlow],
   );
+  const terminalFlowById = useMemo(
+    () =>
+      new Map(
+        (previewPowerFlow?.terminalFlows ?? []).map((terminal) => [
+          terminal.objectId,
+          terminal,
+        ]),
+      ),
+    [previewPowerFlow],
+  );
+
+  const previewBusInjectionById = useMemo(
+    () =>
+      new Map(
+        (previewPowerFlow?.buses ?? []).map((bus) => [bus.id, bus.pInjectionMw]),
+      ),
+    [previewPowerFlow],
+  );
 
   const busbarEnergized = useMemo(
     () => buildBusbarEnergizedMap(objectStates),
@@ -368,6 +445,295 @@ export function SldCanvas() {
     }
   }, [busbarEnergized, loaded]);
 
+  useEffect(() => {
+    const root = hostRef.current?.querySelector("svg");
+    if (!root || !loaded) return;
+
+    root.querySelector("#ADS_POWER_FLOW_OVERLAY")?.remove();
+    root.querySelector("#ADS_TERMINAL_FLOW_OVERLAY")?.remove();
+
+    root
+      .querySelectorAll<SVGGraphicsElement>(
+        ".flow-live,.flow-reverse,.flow-overload,.power-flow-overlay,.branch-flow-overlay,.terminal-flow-overlay,.generator-flow-overlay,.ibt-flow-overlay,.bus-coupler-flow-overlay,.overload-flow-overlay,.overload-flow-halo",
+      )
+      .forEach((node) => {
+        node.classList.remove(
+          "flow-live",
+          "flow-reverse",
+          "flow-overload",
+          "power-flow-overlay",
+          "branch-flow-overlay",
+          "terminal-flow-overlay",
+          "terminal-flow-grid",
+          "terminal-flow-generator",
+          "terminal-flow-load",
+          "generator-flow-overlay",
+          "ibt-flow-overlay",
+          "bus-coupler-flow-overlay",
+          "overload-flow-overlay",
+          "overload-flow-halo",
+        );
+        node.removeAttribute("data-flow-direction");
+        node.removeAttribute("data-flow-mw");
+        node.style.removeProperty("--ads-flow-duration");
+      });
+
+    const sldLayer = root.querySelector("#SLD_ADS_HMI");
+    const powerFlowOverlay = document.createElementNS(svgNamespace, "g");
+    powerFlowOverlay.setAttribute("id", "ADS_POWER_FLOW_OVERLAY");
+    powerFlowOverlay.setAttribute("class", "ads-power-flow-layer");
+    powerFlowOverlay.setAttribute("pointer-events", "none");
+
+    // Flow must be visible above the solid red conductor. Earlier versions put
+    // this layer before equipment/conductor groups, so the base SLD line painted
+    // over the dash and the movement became almost invisible. Keep the overlay
+    // pointer-events:none and append it as the top visual layer. The stroke is
+    // intentionally slim/bright so it reads as a moving highlight, not a second
+    // bulky conductor.
+    if (sldLayer) {
+      sldLayer.appendChild(powerFlowOverlay);
+    } else {
+      root.appendChild(powerFlowOverlay);
+    }
+
+    const stripRuntimeSvgAttributes = (node: SVGGraphicsElement) => {
+      node.removeAttribute("id");
+      node.removeAttribute("data-object");
+      node.removeAttribute("data-role");
+      node.removeAttribute("data-kind");
+      node.removeAttribute("tabindex");
+      node.removeAttribute("aria-label");
+      node.removeAttribute("data-state");
+    };
+
+    const addFlowMetadata = (
+      node: SVGGraphicsElement,
+      directionLabel: string,
+      flowMw: number,
+      durationMs: number,
+      reverse = false,
+      overloaded = false,
+    ) => {
+      node.classList.add("power-flow-overlay", "flow-live");
+      if (reverse) node.classList.add("flow-reverse");
+      if (overloaded) node.classList.add("flow-overload");
+      node.setAttribute("data-flow-direction", directionLabel);
+      node.setAttribute("data-flow-mw", String(flowMw));
+      node.style.setProperty("--ads-flow-duration", `${durationMs}ms`);
+    };
+
+    const appendOverloadHalo = (
+      source: SVGGraphicsElement,
+      options: {
+        directionLabel: string;
+        flowMw: number;
+        classes: string[];
+      },
+    ) => {
+      const halo = source.cloneNode(false) as SVGGraphicsElement;
+      stripRuntimeSvgAttributes(halo);
+      halo.classList.add("overload-flow-halo");
+      // Keep type classes for future scoping/debugging, but do not add
+      // power-flow-overlay/flow-live here. The halo is a steady outer glow behind
+      // the moving dash, not another animated conductor.
+      halo.classList.add(
+        ...options.classes.filter((item) => item !== "load-flow-overlay"),
+      );
+      halo.setAttribute("data-flow-direction", options.directionLabel);
+      halo.setAttribute("data-flow-mw", String(options.flowMw));
+      powerFlowOverlay.appendChild(halo);
+    };
+
+    const visualPowerFlow = previewPowerFlow ?? currentPowerFlow;
+
+    const appendUnifiedFlowClone = (
+      elementId: string,
+      options: {
+        directionLabel: string;
+        flowMw: number;
+        durationMs: number;
+        reverse: boolean;
+        overloaded: boolean;
+        classes: string[];
+      },
+    ) => {
+      const node = root.querySelector<SVGGraphicsElement>(
+        `#${CSS.escape(elementId)}`,
+      );
+      if (!node) return;
+
+      if (options.overloaded) {
+        appendOverloadHalo(node, {
+          directionLabel: options.directionLabel,
+          flowMw: options.flowMw,
+          classes: options.classes,
+        });
+      }
+
+      const clone = node.cloneNode(false) as SVGGraphicsElement;
+      stripRuntimeSvgAttributes(clone);
+      clone.classList.add(...options.classes);
+      if (options.overloaded) clone.classList.add("overload-flow-overlay");
+      addFlowMetadata(
+        clone,
+        options.directionLabel,
+        options.flowMw,
+        options.durationMs,
+        options.reverse,
+        options.overloaded,
+      );
+      powerFlowOverlay.appendChild(clone);
+    };
+
+    const appendLoadFlowLineFromArrow = (
+      elementId: string,
+      options: {
+        directionLabel: string;
+        flowMw: number;
+        durationMs: number;
+        reverse: boolean;
+        overloaded: boolean;
+        classes: string[];
+      },
+    ) => {
+      const source = root.querySelector<SVGGraphicsElement>(
+        `#${CSS.escape(elementId)}`,
+      );
+      if (!source) return;
+
+      // Load artwork is a filled compound path: vertical feeder + arrow head
+      // and, for B loads, a connection dot. Animating that compound path makes
+      // the load look wavy/broken. Use its native geometry only as a measuring
+      // reference, then draw a clean SVG <line> so load flow has the same visual
+      // language as generator and IBT terminal lines.
+      const box = source.getBBox();
+      const x = box.x + box.width / 2;
+      const top = box.y;
+      const bottom = box.y + box.height;
+      const arrowHeadReserve = Math.min(18, Math.max(10, box.height * 0.12));
+      const y1 = top;
+      const y2 = bottom - arrowHeadReserve;
+
+      const line = document.createElementNS(svgNamespace, "line");
+      line.setAttribute("x1", String(x));
+      line.setAttribute("x2", String(x));
+      line.setAttribute("y1", String(y1));
+      line.setAttribute("y2", String(y2));
+      line.classList.add(...options.classes, "load-flow-line-overlay");
+      if (options.overloaded) line.classList.add("overload-flow-overlay");
+      addFlowMetadata(
+        line,
+        options.directionLabel,
+        options.flowMw,
+        options.durationMs,
+        options.reverse,
+        options.overloaded,
+      );
+      powerFlowOverlay.appendChild(line);
+    };
+
+    for (const branch of visualPowerFlow?.branches ?? []) {
+      // IBT terminals share the same physical conductor as the branch object.
+      // Draw them from terminalFlows only so IBT does not get double overlays
+      // and stays visually identical to generator/load terminal flow.
+      if (branch.branchId.startsWith("IBT_")) continue;
+
+      const isClosed =
+        branch.status === "closed" &&
+        objectStates[branch.branchId] !== "open" &&
+        objectStates[branch.branchId] !== "failed";
+      const isFlowing = isClosed && branch.absFlowMw > 0.05;
+      if (!isFlowing) continue;
+
+      const durationMs = Math.max(420, 880 - Math.min(360, branch.loadingPct * 3));
+      const svgDirectionMatches = branchSvgPathMatchesTemplateDirection[branch.branchId] ?? true;
+      const reverseDash = branch.flowMw >= 0 ? !svgDirectionMatches : svgDirectionMatches;
+
+      for (const elementId of branchFlowElementMap[branch.branchId] ?? [branch.branchId]) {
+        appendUnifiedFlowClone(elementId, {
+          directionLabel: branch.directionLabel,
+          flowMw: branch.flowMw,
+          durationMs,
+          reverse: reverseDash,
+          overloaded: branch.isOverloaded,
+          classes: [
+            "branch-flow-overlay",
+            "generator-flow-overlay",
+            branch.branchId === "LINE_COUPLER" ? "bus-coupler-flow-overlay" : "line-flow-overlay",
+          ],
+        });
+      }
+    }
+
+    for (const terminal of visualPowerFlow?.terminalFlows ?? []) {
+      const isClosed =
+        terminal.status === "closed" &&
+        objectStates[terminal.objectId] !== "open" &&
+        objectStates[terminal.objectId] !== "failed";
+      if (!isClosed || terminal.absFlowMw <= 0.05) continue;
+
+      const elementIds = terminalFlowElementMap[terminal.objectId] ?? [];
+      if (!elementIds.length) continue;
+
+      const reverse = terminal.kind === "grid" && terminal.flowMw < 0;
+      const durationMs = Math.max(
+        360,
+        900 - Math.min(420, terminal.absFlowMw * 4),
+      );
+      const classes = [
+        "terminal-flow-overlay",
+        "generator-flow-overlay",
+        `terminal-flow-${terminal.kind}`,
+      ];
+      if (terminal.objectId.startsWith("IBT_")) classes.push("ibt-flow-overlay");
+      if (terminal.kind === "load") classes.push("load-flow-overlay");
+
+      for (const elementId of elementIds) {
+        const options = {
+          directionLabel: terminal.directionLabel,
+          flowMw: terminal.flowMw,
+          durationMs,
+          reverse,
+          overloaded: terminal.isOverloaded === true,
+          classes,
+        };
+
+        if (terminal.kind === "load") {
+          appendLoadFlowLineFromArrow(elementId, options);
+        } else {
+          appendUnifiedFlowClone(elementId, options);
+        }
+      }
+    }
+
+    // Keep animation visible, but do not let it sit on top of primary equipment.
+    // SVG z-order follows DOM order. The flow overlay is appended above base
+    // conductors so the moving dash is visible; then busbars and CB/equipment
+    // groups are re-appended after the overlay so their solid geometry stays in
+    // front of the animation. This avoids flow dashes crossing over CB
+    // rectangles and keeps busbars visually authoritative.
+    const bringStaticEquipmentToFront = () => {
+      if (!sldLayer) return;
+
+      for (const elementIds of Object.values(busbarElementMap)) {
+        for (const elementId of elementIds) {
+          const node = root.querySelector<SVGGraphicsElement>(
+            `#${CSS.escape(elementId)}`,
+          );
+          if (node?.parentElement === sldLayer) sldLayer.appendChild(node);
+        }
+      }
+
+      root
+        .querySelectorAll<SVGGraphicsElement>(
+          "#SLD_ADS_HMI > [data-role='open-close']",
+        )
+        .forEach((node) => sldLayer.appendChild(node));
+    };
+
+    bringStaticEquipmentToFront();
+  }, [currentPowerFlow, loaded, objectStates, previewPowerFlow]);
+
   const activeFlowBranch = useMemo(() => {
     if (hoverObjectId && previewBranchFlowById.has(hoverObjectId)) {
       return previewBranchFlowById.get(hoverObjectId);
@@ -394,7 +760,7 @@ export function SldCanvas() {
     () =>
       areaCardPositions.map((card) => {
         const nodeSet = new Set(areaCardBusMap[card.id]);
-        const localGen = localGenerationByArea[card.id]
+        const localGenCapacity = localGenerationByArea[card.id]
           .filter(
             (source) =>
               objectStates[source.id] !== "open" &&
@@ -441,13 +807,23 @@ export function SldCanvas() {
           );
         }
 
-        const hasGridSource = Boolean(
-          ibtBranch && ibtBranch.status === "closed" && ibtFlow > 0,
+        const hasGridConnection = Boolean(ibtBranch && ibtBranch.status === "closed");
+        const gridImport = Math.max(0, ibtFlow);
+        const gridExport = Math.max(0, -ibtFlow);
+        const hasGridSource = hasGridConnection;
+        const busInjectionMw = [...nodeSet].reduce(
+          (sum, busId) => sum + (previewBusInjectionById.get(busId) ?? 0),
+          0,
         );
-        const totalInflow = localGen + Math.max(0, ibtFlow) + tieImport;
+        const solvedLocalGen = Math.max(
+          0,
+          busInjectionMw + load - gridImport + gridExport,
+        );
+        const localGen = Math.min(localGenCapacity, solvedLocalGen);
+        const totalInflow = localGen + gridImport + tieImport;
         const servedByFlow = totalInflow - tieExport;
         const pfBalance = servedByFlow - load;
-        const sourceForAds = localGen + Math.max(0, ibtFlow) + tieImport;
+        const sourceForAds = localGen + gridImport + tieImport;
         const lowerLimit = load * 0.95;
         const upperLimit = load * 1.05;
         const adsBalancePct =
@@ -509,7 +885,9 @@ export function SldCanvas() {
         return {
           ...card,
           localGen,
-          availableGridImport: Math.max(0, ibtFlow),
+          localGenCapacity,
+          availableGridImport: gridImport,
+          gridExport,
           ibtFlow,
           tieImport,
           tieExport,
@@ -529,7 +907,7 @@ export function SldCanvas() {
           tieDetails,
         };
       }),
-    [feeders, objectStates, previewPowerFlow, tripMatrix],
+    [feeders, objectStates, previewBusInjectionById, previewPowerFlow, tripMatrix],
   );
 
   const armedTargetIds = useMemo(() => {
@@ -699,6 +1077,7 @@ export function SldCanvas() {
       lastHoverObjectRef.current = objectId;
       setHoverObject(objectId);
       toggleObject(objectId);
+      (node as unknown as HTMLElement).blur?.();
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -876,18 +1255,27 @@ export function SldCanvas() {
       setState(objectId, state === "closed");
       if (objectMwText[objectId]) {
         const branchFlow = branchFlowById.get(objectId);
-        const useRuleRelief =
+        const terminalFlow = terminalFlowById.get(objectId);
+        const useBranchFlow =
           objectId.startsWith("LINE_") || objectId.startsWith("IBT_");
-        const configuredMw = useRuleRelief
+        const configuredMw = useBranchFlow
           ? (branchFlow?.absFlowMw ??
             contingencyRules[objectId]?.requiredReliefMw)
-          : undefined;
-        setText(
-          `MW_${objectId}`,
-          state === "open"
-            ? "0 MW"
-            : `${configuredMw ?? objectMwText[objectId].replace(" MW", "")} MW`,
-        );
+          : terminalFlow?.absFlowMw;
+        const fallbackMw = Number(objectMwText[objectId].replace(" MW", ""));
+        const capacityMw = sourceCapacityByObject[objectId];
+        const label = (() => {
+          if (state === "open") return capacityMw ? `0/${formatMw(capacityMw)} MW` : "0 MW";
+          if (objectId.startsWith("IBT_") && branchFlow) {
+            const direction = branchFlow.flowMw >= 0 ? "IMP" : "EXP";
+            return `${direction} ${formatMw(branchFlow.absFlowMw)}/${formatMw(branchFlow.ratingMw)} MW`;
+          }
+          if (objectId.startsWith("GEN_") && capacityMw) {
+            return `${formatMw(configuredMw ?? 0)}/${formatMw(capacityMw)} MW`;
+          }
+          return `${formatMw(configuredMw ?? fallbackMw)} MW`;
+        })();
+        setText(`MW_${objectId}`, label);
       }
       if (state === "open") {
         const node = root.querySelector(
@@ -928,6 +1316,7 @@ export function SldCanvas() {
     loaded,
     objectStates,
     runbackTargetIds,
+    terminalFlowById,
   ]);
 
   return (
@@ -1136,7 +1525,7 @@ export function SldCanvas() {
                 <section className="substation-flow-tooltip">
                   <strong>{card.name} Power Flow Lite reasoning</strong>
                   <p>
-                    Local Gen {formatMw(card.localGen)} MW, IBT/Grid flow{" "}
+                    Local Gen dispatch {formatMw(card.localGen)} MW / cap {formatMw(card.localGenCapacity)} MW, IBT/Grid flow{" "}
                     {signedMw(card.ibtFlow)} MW, tie import{" "}
                     {formatMw(card.tieImport)} MW, tie export{" "}
                     {formatMw(card.tieExport)} MW, load {formatMw(card.load)}{" "}
