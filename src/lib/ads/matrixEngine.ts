@@ -291,6 +291,25 @@ function dcBranchBusesToDisplayBuses(constraint: BranchFlowResult): Array<"A" | 
   return [...buses];
 }
 
+function flowSendingBus(constraint: BranchFlowResult): BranchFlowResult["fromBus"] {
+  return constraint.flowMw >= 0 ? constraint.fromBus : constraint.toBus;
+}
+
+function flowReceivingBus(constraint: BranchFlowResult): BranchFlowResult["fromBus"] {
+  return constraint.flowMw >= 0 ? constraint.toBus : constraint.fromBus;
+}
+
+function isGridBus(bus: BranchFlowResult["fromBus"]): boolean {
+  return bus === "GRID_A" || bus === "GRID_C";
+}
+
+function dcBusToDisplayBus(bus: BranchFlowResult["fromBus"]): "A" | "B" | "C" | undefined {
+  if (bus === "A") return "A";
+  if (bus === "B1" || bus === "B2") return "B";
+  if (bus === "C") return "C";
+  return undefined;
+}
+
 
 function isClosedState(state: BreakerState | undefined): boolean {
   return state !== "open" && state !== "failed";
@@ -751,47 +770,116 @@ function evaluateFlowConstraint(
   snapshot: SystemSnapshot,
 ): AdsDecision {
   const requiredReductionMw = Math.ceil(constraint.requiredReductionMw);
-  const localFeeders = localEligibleFeeders(snapshot.feeders, island);
-  const decision = rankShedding(localFeeders, requiredReductionMw, {
+  const sendingBus = flowSendingBus(constraint);
+  const receivingBus = flowReceivingBus(constraint);
+  const sendingArea = dcBusToDisplayBus(sendingBus);
+  const receivingArea = dcBusToDisplayBus(receivingBus);
+  const isExportOverload = isGridBus(receivingBus) && Boolean(sendingArea);
+
+  if (isExportOverload && sendingArea) {
+    const sourceUnits = getSourceUnits();
+    const allowedGeneratorIds = sourceUnits
+      .filter((source) => source.kind === "generator")
+      .filter((source) => source.bus === sendingArea)
+      .filter((source) => island.generatorIds.includes(source.id))
+      .filter((source) => isClosedState(snapshot.objectStates[source.id] ?? source.state))
+      .map((source) => source.id);
+
+    const decision = rankGenerationShedding(requiredReductionMw, {
+      ...enrichRuleContext(triggerId, rule),
+      title: `${constraint.branchId} Export Flow Constraint`,
+      mode: "POWER FLOW LITE",
+      actionType: "OGS_GENERATOR_SHEDDING",
+      scenarioKind: "ogs_surplus",
+      strictAffectedBuses: true,
+      affectedBuses: [sendingArea],
+      allowedGeneratorIds,
+      constraint: `${constraint.branchId} export loading ${constraint.loadingPct.toFixed(1)}%`,
+      explanation:
+        "Power Flow Lite sees this as export/back-feed overload toward the grid. Load shedding would reduce local demand and can increase export, so the safe remedial class is generator runback/shedding.",
+      detectedCondition:
+        `${constraint.branchId}: ${constraint.directionLabel}, |flow| ${constraint.absFlowMw.toFixed(1)} MW > 110% rating ${constraint.ratingMw} MW.`,
+      operatorMessage:
+        `Export overload on ${constraint.branchId}. Do not shed load for this constraint; reduce generation on Bus ${sendingArea} by about ${requiredReductionMw} MW or re-dispatch/tie-transfer.`,
+      imbalanceBasis:
+        `${constraint.branchId} flow is from ${sendingBus} toward ${receivingBus}; this is export/back-feed, not import load demand.`,
+      imbalanceFormula:
+        `Required export reduction = |flow| ${constraint.absFlowMw.toFixed(1)} - 85% x ${constraint.ratingMw} = ${requiredReductionMw} MW`,
+      steps: [
+        "Build system snapshot.",
+        "Solve balanced DC-style Power Flow Lite per active island.",
+        "Read branch direction, not only absolute MW.",
+        "Classify grid-facing reverse flow as export/back-feed overload.",
+        "Use generation reduction/redispatch, not load shedding, because load shedding worsens export.",
+      ],
+      passCriteria: [
+        "IBT import and export are classified differently.",
+        "Load shedding is inhibited for export/back-feed overload.",
+        "Generator target is local to the sending/source side.",
+      ],
+    });
+
+    return decision.status === "armed"
+      ? decision
+      : {
+          ...decision,
+          status: "blocked",
+          selectedGeneration: undefined,
+          operatorMessage:
+            `Export overload on ${constraint.branchId}. No discrete generator trip fits the required reduction; use generator runback/redispatch or network reconfiguration instead of load shedding.`,
+        };
+  }
+
+  const targetBus = receivingArea;
+  const islandFeeders = localEligibleFeeders(snapshot.feeders, island);
+  const localFeeders = targetBus
+    ? islandFeeders.filter((feeder) => feeder.bus === targetBus)
+    : islandFeeders;
+  const fallbackFeeders = localFeeders.length > 0 ? localFeeders : islandFeeders;
+  const affectedBuses = targetBus ? [targetBus] : island.buses;
+
+  const decision = rankShedding(fallbackFeeders, requiredReductionMw, {
     ...enrichRuleContext(triggerId, rule),
     title: `${constraint.branchId} Flow Constraint`,
     mode: "POWER FLOW LITE",
     actionType: "OLS_LOAD_SHEDDING",
     scenarioKind: "ols_overload",
     strictAffectedBuses: true,
-    affectedBuses: island.buses,
+    affectedBuses,
     constraint: `${constraint.branchId} loading ${constraint.loadingPct.toFixed(1)}%`,
     explanation:
-      "Power Flow Lite estimates branch MW flow after the contingency and arms only local targets that can reduce the active constraint.",
+      "Power Flow Lite estimates branch MW flow after the contingency and arms only receiving-side local targets that can reduce the active constraint.",
     detectedCondition:
       `${constraint.branchId}: |flow| ${constraint.absFlowMw.toFixed(1)} MW > 110% rating ${constraint.ratingMw} MW. Direction ${constraint.directionLabel}.`,
     operatorMessage:
-      `Power Flow Lite detects ${constraint.branchId} overload. Required reduction ${requiredReductionMw} MW to reach <=85% loading target.`,
+      targetBus
+        ? `Power Flow Lite detects ${constraint.branchId} import/transfer overload. Required reduction ${requiredReductionMw} MW on receiving Bus ${targetBus} to reach <=85% loading target.`
+        : `Power Flow Lite detects ${constraint.branchId} overload. Required reduction ${requiredReductionMw} MW to reach <=85% loading target.`,
     imbalanceBasis:
       `${constraint.branchId}: flow ${constraint.absFlowMw.toFixed(1)} MW, rating ${constraint.ratingMw} MW, loading ${constraint.loadingPct.toFixed(1)}%.`,
     imbalanceFormula:
       `Required reduction = |flow| ${constraint.absFlowMw.toFixed(1)} - 85% x ${constraint.ratingMw} = ${requiredReductionMw} MW`,
     steps: [
       "Build system snapshot.",
-      "Solve DC-style Power Flow Lite per active island.",
+      "Solve balanced DC-style Power Flow Lite per active island.",
       "Detect branch loading above 110% pickup.",
-      "Calculate required reduction to 85% rating target.",
-      "Rank local load combinations inside the affected island.",
+      "Classify flow direction and receiving bus.",
+      "Rank load combinations on the receiving side first.",
     ],
     passCriteria: [
       "Branch loading pickup is evaluated from Power Flow Lite.",
-      "Targets are local to the constrained electrical area.",
+      "Targets are local to the receiving side of the constrained branch.",
       "Final target aims to reduce loading to <=85% rating.",
     ],
   });
 
   if (decision.status === "normal") return decision;
-  if (localFeeders.length === 0) {
+  if (fallbackFeeders.length === 0) {
     return {
       ...decision,
       status: "blocked",
       operatorMessage:
-        `Power Flow Lite detects ${constraint.branchId} overload, but no local closed load target exists in island ${island.id}.`,
+        `Power Flow Lite detects ${constraint.branchId} overload, but no closed receiving-side load target exists in island ${island.id}.`,
     };
   }
   return decision;
