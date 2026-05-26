@@ -8,12 +8,13 @@
     "dev": "vite --mode localhost --host 127.0.0.1",
     "build": "vite build --mode production && node scripts/generate-seo.mjs production",
     "build:local": "vite build --mode localhost && node scripts/generate-seo.mjs localhost",
-    "build:github": "vite build --mode github && node scripts/generate-seo.mjs github",
+    "build:github": "vite build --mode github && node scripts/generate-seo.mjs github && node scripts/verify-github-pages-build.mjs",
     "build:cloudflare": "vite build --mode cloudflare && node scripts/generate-seo.mjs cloudflare && node scripts/prune-cloudflare-assets.mjs",
     "preview": "vite preview --mode localhost --host 127.0.0.1",
     "preview:local": "vite preview --mode localhost --host 127.0.0.1",
-    "preview:github": "vite preview --mode github --host 127.0.0.1 --base /ads/",
-    "seo:generate": "node scripts/generate-seo.mjs production"
+    "preview:github": "vite preview --host 127.0.0.1 --port 4177",
+    "seo:generate": "node scripts/generate-seo.mjs production",
+    "serve:github": "npm run build:github && npm run preview:github"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

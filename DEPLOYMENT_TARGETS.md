@@ -58,3 +58,28 @@ https://powerflow.pages.dev/app/
 ```
 
 Cloudflare is the canonical SEO domain. GitHub Pages is a working mirror.
+
+
+## GitHub Pages route rule
+
+This repository is a GitHub Pages **project site**, so the simulator URL is:
+
+```txt
+https://masarray.github.io/ads/app/
+```
+
+The shorter URL below belongs to the GitHub account root site and cannot be served from this repository:
+
+```txt
+https://masarray.github.io/app/
+```
+
+For GitHub Pages, use `npm run build:github`. The build uses `VITE_BASE_PATH=/ads/`, generates `dist/app/index.html`, and verifies that generated JS/CSS assets are referenced as `/ads/assets/...`.
+
+Quick route check after deploy:
+
+```txt
+https://masarray.github.io/ads/
+https://masarray.github.io/ads/app/
+https://masarray.github.io/ads/sitemap.xml
+```

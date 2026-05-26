@@ -40,6 +40,9 @@ jobs:
       - name: Build for GitHub Pages
         run: pnpm build:github
 
+      - name: Verify GitHub Pages routes
+        run: test -f dist/index.html && test -f dist/app/index.html && test -f dist/404.html && grep -q '/ads/assets/' dist/app/index.html
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
