@@ -1,1 +1,7 @@
-/* /index.html 200
+/app/* /app/index.html 200
+/simulator /app/ 301
+/power-flow /learn/power-flow/ 301
+/load-flow /learn/load-flow/ 301
+/defense-scheme /learn/adaptive-defense-scheme/ 301
+/blackstart /learn/blackstart/ 301
+/islanding /learn/islanding/ 301

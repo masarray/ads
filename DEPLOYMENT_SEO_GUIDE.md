@@ -1,104 +1,78 @@
-# Deployment + SEO Guide
+# ADS Simulator Deployment + SEO Guide
 
-This project can be deployed in parallel to GitHub Pages and Cloudflare Pages from the same source code.
+## Public URL strategy
 
-## Build targets
+- Cloudflare Pages is the primary SEO canonical domain: `https://powerflow.pages.dev/`
+- GitHub Pages remains a working mirror: `https://masarray.github.io/ads/`
+- The interactive simulator runs at `/app/`.
+- The root `/` is now a fast static SEO landing page.
+- Learning pages are static HTML under `/learn/.../`, so they are crawler-friendly and do not depend on React hydration.
+
+## Build commands
+
+### GitHub Pages
 
 ```bash
-npm run build:github
+pnpm build:github
+```
+
+Output: `dist/` with base path `/ads/`.
+
+GitHub Pages setting must be:
+
+```txt
+Settings > Pages > Source: GitHub Actions
+```
+
+### Cloudflare Pages
+
+```bash
 npm run build:cloudflare
 ```
 
-GitHub Pages uses `base=/ads/` because the project is deployed at `https://masarray.github.io/ads/`.
-Cloudflare Pages uses `base=/` because Pages normally serves the project at the domain root.
-
-## GitHub Pages
-
-1. Push to `main`.
-2. In GitHub repository settings, open **Settings → Pages**.
-3. Set **Source** to **GitHub Actions**.
-4. The workflow `.github/workflows/pages.yml` runs `pnpm build:github` and uploads `dist`.
-
-## Cloudflare Pages
-
-Connect the same GitHub repository to Cloudflare Pages.
-
-Recommended settings:
+Cloudflare Pages settings:
 
 ```txt
-Framework preset: Vite
 Build command: npm run build:cloudflare
 Build output directory: dist
-Root directory: /
 ```
 
-Set environment variables in Cloudflare Pages when you already know the final domain:
+The Cloudflare build automatically removes `.gif` files and assets larger than 25 MiB from `dist`.
 
-```txt
-VITE_SITE_URL=https://your-domain.example/
-VITE_CANONICAL_URL=https://your-domain.example/
-VITE_OG_IMAGE_URL=https://your-domain.example/og-image.png
-```
+## SEO pages generated
 
-If Cloudflare is the primary SEO domain and GitHub Pages is only a mirror, set GitHub's `VITE_CANONICAL_URL` to the Cloudflare/custom domain to avoid duplicate-content signals.
+- `/`
+- `/app/`
+- `/learn/power-flow/`
+- `/learn/load-flow/`
+- `/learn/adaptive-defense-scheme/`
+- `/learn/load-shedding/`
+- `/learn/islanding/`
+- `/learn/blackout/`
+- `/learn/blackstart/`
+- `/learn/microgrid/`
+- `/learn/generator-runback/`
+- `/glossary/`
 
 ## Generated SEO files
 
-After every production build, `scripts/generate-seo.mjs` creates:
+- `sitemap.xml`
+- `robots.txt`
+- `site.webmanifest`
+- `humans.txt`
+- `_headers`
+- `_redirects`
+- `404.html`
+- `.nojekyll`
 
-- `dist/sitemap.xml`
-- `dist/robots.txt`
-- `dist/site.webmanifest`
-- `dist/404.html` for GitHub Pages SPA fallback
-- `dist/humans.txt`
+## Why GitHub Pages used to look stuck
 
-## SEO checklist after deploy
+The previous root page was being used as both SEO fallback and React app boot shell. If the JavaScript bundle failed to load or GitHub Pages served the wrong build source, the page stayed on the static loading message.
 
-1. Submit the production URL to Google Search Console.
-2. Submit `sitemap.xml`.
-3. Check that the canonical URL points to the preferred production domain.
-4. Share the app from the canonical URL in LinkedIn, YouTube descriptions, GitHub README, and engineering forums.
-5. Add a short learning article or README section with keywords naturally: Adaptive Defense Scheme, Power Flow Lite, OLS, OGS, trip matrix, islanding, generator runback.
+V16 separates them:
 
-## Cloudflare Pages: exclude README GIF demo
+- `/` is a real static landing page.
+- `/app/` is the React simulator.
+- `/learn/.../` pages are static HTML for SEO.
 
-Cloudflare Pages rejects any file in the final `dist` output that is larger than 25 MiB. The project demo GIF is only for the GitHub README, so it must not be deployed as a web asset.
-
-The Cloudflare build now runs:
-
-```bash
-npm run build:cloudflare
-```
-
-This command automatically runs:
-
-```bash
-node scripts/prune-cloudflare-assets.mjs
-```
-
-The prune script removes from `dist`:
-- all `.gif` files
-- any accidental asset with size `>= 25 MiB`
-
-Recommended repository structure:
-
-```txt
-demo/demo.gif            # OK: GitHub README only, not copied by Vite
-public/demo/demo.gif     # Avoid: Vite copies this to dist/demo/demo.gif
-```
-
-For README, prefer:
-
-```md
-![Adaptive Defense Scheme demo](demo/demo.gif)
-```
-
-Cloudflare Pages settings stay:
-
-```txt
-Build command: npm run build:cloudflare
-Build output directory: dist
-```
-
-The messages `No Wrangler configuration file found` and `No functions dir at /functions found` are not the problem for this static Vite app. The real failure was the oversized GIF inside `dist`.
-
+This makes failure modes clearer and makes the site easier for search engines and humans to understand.
