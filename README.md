@@ -10,7 +10,7 @@
 ## Demo Preview
 
 <p align="center">
-  <img src="./public/demo/demo.gif" alt="Mas Ari ADS Simulator animated demo" width="100%" />
+  <img src="demo/demo.gif" alt="Mas Ari ADS Simulator animated demo" width="100%" />
 </p>
 
 ## Overview
