@@ -83,3 +83,8 @@ https://masarray.github.io/ads/
 https://masarray.github.io/ads/app/
 https://masarray.github.io/ads/sitemap.xml
 ```
+
+## v19 note: GitHub Actions env safety
+
+The build scripts no longer depend only on `.env.github` being present in CI. `scripts/run-vite-target.mjs` injects the correct target variables before Vite starts, so `pnpm build:github` reliably builds with `base=/ads/`.
+

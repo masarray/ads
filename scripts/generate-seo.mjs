@@ -1,9 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnv } from "vite";
+import { applyTargetEnv, resolveTargetEnv } from "./target-env.mjs";
 
 const mode = process.argv[2] || process.env.DEPLOY_TARGET || "production";
-const env = loadEnv(mode, process.cwd(), "");
+const targetDefaults = applyTargetEnv(mode);
+const env = { ...resolveTargetEnv(mode), ...loadEnv(mode, process.cwd(), ""), ...targetDefaults, ...process.env };
 const distDir = join(process.cwd(), "dist");
 mkdirSync(distDir, { recursive: true });
 

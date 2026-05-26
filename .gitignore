@@ -1,6 +1,12 @@
 node_modules/
 dist/
 .vite/
+*.log
+
+# Keep target env files tracked because they contain public deploy paths only, not secrets.
 .env
 .env.*
-*.log
+!.env.localhost
+!.env.github
+!.env.cloudflare
+!.env.production
