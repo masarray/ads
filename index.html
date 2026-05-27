@@ -79,9 +79,10 @@
 
       :root {
         color-scheme: dark;
-        font-family:
-          "Google Sans Text",
-          "Google Sans",
+        --ads-font-sans:
+          "Segoe UI Variable Text",
+          "Segoe UI Variable",
+          Aptos,
           Inter,
           ui-sans-serif,
           system-ui,
@@ -89,6 +90,8 @@
           BlinkMacSystemFont,
           "Segoe UI",
           sans-serif;
+        font-family:
+          var(--ads-font-sans);
 
         /* ADS app / Material 3 Expressive tokens */
         --m3-bg: #06100e;
@@ -156,6 +159,7 @@
           var(--m3-bg);
         background-attachment: fixed;
         color: var(--m3-text);
+        font-weight: 430;
         overflow-x: hidden;
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
@@ -594,6 +598,42 @@
         display: block;
         height: 100%;
         width: 46%;
+      }
+
+      body,
+      button,
+      input,
+      textarea,
+      select {
+        font-family: var(--ads-font-sans);
+      }
+
+      h1,
+      .section-head h2,
+      .panel h2,
+      .launch-brand-row h2 {
+        font-weight: 640;
+        letter-spacing: -0.032em;
+      }
+
+      .brand-title strong,
+      .statusbar strong,
+      .card h3,
+      .metric strong,
+      .diagram .pv-card-value {
+        font-weight: 620;
+      }
+
+      .btn,
+      .chip,
+      .badge,
+      .eyebrow,
+      .card .num,
+      .metric span,
+      .diagram .pv-label,
+      .diagram .pv-chip-text,
+      .diagram .pv-card-title {
+        font-weight: 650;
       }
 
       @media (max-width: 900px) {

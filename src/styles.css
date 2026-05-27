@@ -7,9 +7,10 @@
 
 :root {
   color-scheme: dark;
-  font-family:
-    "Google Sans Text",
-    "Google Sans",
+  --ads-font-sans:
+    "Segoe UI Variable Text",
+    "Segoe UI Variable",
+    Aptos,
     Inter,
     ui-sans-serif,
     system-ui,
@@ -17,6 +18,8 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+  font-family:
+    var(--ads-font-sans);
 
   /* M3 sys color (dark, custom teal accent) */
   --m3-bg: #06100e;
@@ -95,6 +98,11 @@ body {
     var(--m3-bg);
   background-attachment: fixed;
   color: var(--m3-text);
+  font-family: var(--ads-font-sans);
+  font-weight: 430;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button {
@@ -4439,4 +4447,62 @@ button {
   .engineer-coach-compact.is-open .engineer-coach-grid {
     max-height: 660px;
   }
+}
+
+/* Phase 26A - lean, sharp product typography */
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--ads-font-sans);
+}
+
+h1,
+h2,
+h3,
+.brand-lockup h1,
+.startup-brand-row h1,
+.about-card-header h3,
+.help-card-header h3,
+.logic-hero-compact h2,
+.coach-card h3 {
+  font-weight: 640;
+  letter-spacing: -0.024em;
+}
+
+strong,
+b,
+.command-button,
+.about-button,
+.state-pill strong,
+.system-strip strong,
+.metric strong,
+.decision-card strong,
+.power-flow-metrics strong,
+.substation-flow-card strong,
+.branch-flow-list b,
+.coach-card strong,
+.coach-metric,
+.coach-target b,
+.startup-brand-mark {
+  font-weight: 620;
+}
+
+small,
+.brand-lockup p,
+.state-pill span,
+.metric small,
+.decision-card small,
+.reasoning-step small,
+.about-card-header small,
+.help-section h4,
+.startup-steps span,
+.logic-mini-metrics small,
+.logic-equation-card small,
+.logic-steps-compact small,
+.logic-target-compact small,
+.coach-pill,
+.coach-mini-chip {
+  font-weight: 560;
 }

@@ -90,7 +90,8 @@
     <style>
       :root {
         color-scheme: dark;
-        font-family: "Google Sans Text", "Google Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --ads-font-sans: "Segoe UI Variable Text", "Segoe UI Variable", Aptos, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: var(--ads-font-sans);
         --m3-bg: #06100e;
         --m3-surface: rgba(14, 28, 25, 0.88);
         --m3-outline: rgba(160, 210, 198, 0.22);
@@ -106,7 +107,7 @@
       }
       * { box-sizing: border-box; }
       html, body, #root { min-height: 100%; margin: 0; }
-      body { background: var(--m3-bg); color: var(--m3-text); -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+      body { background: var(--m3-bg); color: var(--m3-text); font-family: var(--ads-font-sans); font-weight: 430; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
       .startup-splash {
         align-items: center;
         background:
@@ -183,13 +184,13 @@
         color: var(--m3-primary-ink);
         display: inline-flex;
         font-size: 13px;
-        font-weight: 950;
+        font-weight: 680;
         height: 54px;
         justify-content: center;
         letter-spacing: 0.08em;
         width: 54px;
       }
-      .startup-brand-row h1 { font-size: 24px; letter-spacing: -0.04em; margin: 0; }
+      .startup-brand-row h1 { font-size: 24px; font-weight: 640; letter-spacing: -0.032em; margin: 0; }
       .startup-brand-row p { color: var(--m3-muted); font-size: 13px; margin: 5px 0 0; }
       .startup-progress {
         background: rgba(255, 255, 255, 0.045);
@@ -214,7 +215,7 @@
         border-radius: 14px;
         color: var(--m3-muted);
         font-size: 11px;
-        font-weight: 750;
+        font-weight: 560;
         padding: 9px 10px;
         text-align: center;
       }
