@@ -190,6 +190,14 @@
       @keyframes brand-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
       @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
       @keyframes pvDash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -16; } }
+      @keyframes overloadPulse {
+        0%, 68%, 100% { opacity: .32; stroke-width: 11; }
+        74%, 84% { opacity: .92; stroke-width: 13.5; }
+        90% { opacity: .44; stroke-width: 11.5; }
+      }
+      @keyframes pvScan { 0%, 48% { transform: translateX(-120%); opacity: 0; } 56% { opacity: .8; } 78%, 100% { transform: translateX(120%); opacity: 0; } }
+      @keyframes launch-fill { from { transform: translateX(-64%); } to { transform: translateX(160%); } }
+      @keyframes launch-in { from { opacity: 0; transform: scale(1.015); } to { opacity: 1; transform: scale(1); } }
       @keyframes soft-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
       a { color: inherit; }
@@ -355,6 +363,7 @@
         background: linear-gradient(135deg, #b9fff3, var(--m3-primary) 48%, var(--m3-primary-strong));
         box-shadow: 0 0 0 1px rgba(255,255,255,.18) inset, 0 18px 42px -16px rgba(125,240,226,.8);
       }
+      .btn.launching { pointer-events: none; }
       .trust-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
       .chip {
         border: 1px solid var(--m3-outline);
@@ -386,6 +395,17 @@
         inset: 0;
         background: radial-gradient(circle at 35% 8%, rgba(125,240,226,.14), transparent 30%), radial-gradient(circle at 82% 80%, rgba(255,82,119,.11), transparent 34%);
         pointer-events: none;
+      }
+      .visual-card::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        background: linear-gradient(110deg, transparent 0%, transparent 36%, rgba(255,255,255,.14) 48%, rgba(125,240,226,.22) 52%, transparent 66%, transparent 100%);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-120%);
+        animation: pvScan 4.8s ease-in-out infinite;
       }
       .statusbar {
         position: relative;
@@ -420,17 +440,27 @@
         margin: 18px 0;
         border: 1px solid var(--m3-outline);
         border-radius: var(--m3-shape-xl);
-        background: radial-gradient(circle at 32% 12%, rgba(125,240,226,.08), transparent 34%), linear-gradient(180deg, rgba(6,16,14,.84), rgba(2,9,8,.56));
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+        background:
+          radial-gradient(circle at 20% 8%, rgba(125,240,226,.12), transparent 32%),
+          radial-gradient(circle at 88% 86%, rgba(155,182,255,.08), transparent 34%),
+          linear-gradient(180deg, rgba(6,16,14,.9), rgba(2,9,8,.64));
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.05), inset 0 -1px 0 rgba(125,240,226,.05);
         overflow: hidden;
+      }
+      .diagram::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,.035), transparent 26%);
+        pointer-events: none;
       }
       .diagram svg { display: block; width: 100%; height: auto; shape-rendering: geometricPrecision; }
       .diagram .pv-grid { stroke: rgba(125,240,226,.13); stroke-width: 1; }
-      .diagram .pv-busbar { stroke: #ff5277; stroke-width: 8; stroke-linecap: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,82,119,.34)); }
-      .diagram .pv-energized-halo { stroke: rgba(255,82,119,.74); stroke-width: 8; stroke-linecap: round; fill: none; filter: drop-shadow(0 0 5px rgba(255,82,119,.52)) drop-shadow(0 0 14px rgba(255,82,119,.14)); }
-      .diagram .pv-conductor { stroke: #ff5277; stroke-width: 4.2; stroke-linecap: round; fill: none; }
-      .diagram .pv-flow { stroke: var(--m3-primary); stroke-width: 2.25; stroke-dasharray: 5 11; stroke-dashoffset: 0; stroke-linecap: round; fill: none; animation: pvDash 720ms linear infinite; filter: none; opacity: .98; }
-      .diagram .pv-overload-halo { stroke: rgba(255,205,107,.24); stroke-width: 10; stroke-linecap: round; fill: none; filter: drop-shadow(0 0 7px rgba(255,205,107,.52)) drop-shadow(0 0 14px rgba(255,205,107,.18)); }
+      .diagram .pv-busbar { stroke: #ff5277; stroke-width: 9; stroke-linecap: round; fill: none; filter: drop-shadow(0 0 7px rgba(255,82,119,.36)); }
+      .diagram .pv-energized-halo { stroke: rgba(255,82,119,.72); stroke-width: 8.5; stroke-linecap: round; fill: none; filter: drop-shadow(0 0 5px rgba(255,82,119,.5)) drop-shadow(0 0 13px rgba(255,82,119,.13)); }
+      .diagram .pv-conductor { stroke: #ff5277; stroke-width: 4.4; stroke-linecap: round; fill: none; }
+      .diagram .pv-flow { stroke: #86f7ff; stroke-width: 2.35; stroke-dasharray: 3 12; stroke-dashoffset: 0; stroke-linecap: round; fill: none; animation: pvDash 680ms linear infinite; filter: drop-shadow(0 0 2px rgba(134,247,255,.78)); opacity: .98; }
+      .diagram .pv-overload-halo { animation: overloadPulse 4.4s ease-in-out infinite; stroke: rgba(255,154,35,.42); stroke-width: 11; stroke-linecap: round; fill: none; filter: drop-shadow(0 0 5px rgba(255,183,77,.62)) drop-shadow(0 0 14px rgba(255,145,0,.18)); }
       .diagram .pv-breaker { fill: #ff5277; stroke: var(--m3-text); stroke-width: 2; filter: drop-shadow(0 0 7px rgba(255,82,119,.4)); }
       .diagram .pv-breaker-open { fill: var(--m3-text); stroke: rgba(255,255,255,.94); stroke-width: 2; filter: drop-shadow(0 0 7px rgba(243,248,245,.32)); }
       .diagram .pv-terminal { fill: #ff6b88; filter: drop-shadow(0 0 5px rgba(255,82,119,.45)); }
@@ -439,6 +469,9 @@
       .diagram .pv-label { fill: var(--m3-text) !important; font-size: 12px; font-weight: 720; letter-spacing: .015em; }
       .diagram .pv-note { fill: var(--m3-muted) !important; font-size: 11px; font-weight: 680; letter-spacing: .02em; }
       .diagram .pv-chip-text { fill: #ffe6b5 !important; font-size: 11px; font-weight: 780; letter-spacing: .02em; }
+      .diagram .pv-card { fill: rgba(8, 20, 18, .74); stroke: rgba(125,240,226,.2); stroke-width: 1; }
+      .diagram .pv-card-title { fill: var(--m3-primary) !important; font-size: 9px; font-weight: 860; letter-spacing: .12em; text-transform: uppercase; }
+      .diagram .pv-card-value { fill: var(--m3-text) !important; font-size: 13px; font-weight: 820; letter-spacing: -.01em; }
 
       .metrics {
         display: grid;
@@ -502,6 +535,67 @@
       footer a { color: var(--m3-primary); text-decoration: none; }
       footer a:hover { text-decoration: underline; }
 
+      .launch-transition {
+        align-items: center;
+        background:
+          radial-gradient(circle at 24% 14%, rgba(125, 240, 226, 0.18), transparent 34%),
+          radial-gradient(circle at 78% 82%, rgba(155, 182, 255, 0.12), transparent 36%),
+          linear-gradient(rgba(125, 240, 226, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(125, 240, 226, 0.045) 1px, transparent 1px),
+          #050d0c;
+        background-size: auto, auto, 30px 30px, 30px 30px;
+        display: grid;
+        inset: 0;
+        justify-items: center;
+        opacity: 0;
+        padding: 28px;
+        pointer-events: none;
+        position: fixed;
+        transition: opacity 240ms var(--m3-easing-emphasized);
+        z-index: 99;
+      }
+      body.is-launching .launch-transition {
+        animation: launch-in 320ms var(--m3-easing-emphasized) both;
+        opacity: 1;
+      }
+      body.is-launching .page {
+        filter: blur(7px);
+        opacity: .22;
+        transform: scale(.992);
+        transition: opacity 240ms var(--m3-easing), filter 240ms var(--m3-easing), transform 240ms var(--m3-easing);
+      }
+      .launch-card {
+        border: 1px solid rgba(125, 240, 226, 0.26);
+        border-radius: 30px;
+        background:
+          linear-gradient(135deg, rgba(14, 28, 25, 0.88), rgba(5, 13, 12, 0.94)),
+          radial-gradient(circle at 18% 0%, rgba(125, 240, 226, 0.2), transparent 44%);
+        box-shadow: 0 34px 90px -48px rgba(125, 240, 226, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        display: grid;
+        gap: 18px;
+        padding: 26px;
+        width: min(520px, calc(100vw - 48px));
+      }
+      .launch-brand-row { align-items: center; display: grid; gap: 14px; grid-template-columns: auto 1fr; }
+      .launch-brand-row .brand-mark { height: 54px; width: 54px; border-radius: 19px; }
+      .launch-brand-row h2 { font-size: 24px; letter-spacing: -.04em; line-height: 1.1; margin: 0; }
+      .launch-brand-row p { color: var(--m3-muted); font-size: 13px; margin: 5px 0 0; }
+      .launch-progress {
+        background: rgba(255,255,255,.045);
+        border: 1px solid rgba(125,240,226,.12);
+        border-radius: 999px;
+        height: 10px;
+        overflow: hidden;
+      }
+      .launch-progress span {
+        animation: launch-fill 1.1s ease-in-out infinite;
+        background: linear-gradient(90deg, transparent, rgba(125,240,226,.95), rgba(255,205,107,.78), transparent);
+        border-radius: inherit;
+        display: block;
+        height: 100%;
+        width: 46%;
+      }
+
       @media (max-width: 900px) {
         .nav { align-items: flex-start; flex-direction: column; position: relative; top: 0; }
         .brand { border-right: 0; padding-right: 0; }
@@ -525,11 +619,19 @@
     <main class="page">
       <nav class="nav" aria-label="Main navigation">
         <a class="brand" href="%VITE_BASE_PATH%">
-          <span class="brand-mark">ADS</span>
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="7" cy="6" r="3"></circle>
+              <circle cx="17" cy="6" r="3"></circle>
+              <circle cx="12" cy="18" r="3"></circle>
+              <path d="M7 9v1a5 5 0 0 0 5 5"></path>
+              <path d="M17 9v1a5 5 0 0 1-5 5"></path>
+            </svg>
+          </span>
           <span class="brand-title"><strong>Mas Ari ADS Simulator</strong><span>Power-system learning lab</span></span>
         </a>
         <div class="nav-links">
-          <a href="%VITE_BASE_PATH%app/">Simulator</a>
+          <a href="%VITE_BASE_PATH%app/" data-launch-app>Simulator</a>
           <a href="%VITE_BASE_PATH%learn/power-flow/">Power Flow</a>
           <a href="%VITE_BASE_PATH%learn/adaptive-defense-scheme/">Defense Scheme</a>
           <a href="%VITE_BASE_PATH%glossary/">Glossary</a>
@@ -546,7 +648,7 @@
             Built for engineers, students, and operators who want to see the logic instead of only reading it.
           </p>
           <div class="actions">
-            <a class="btn primary" href="%VITE_BASE_PATH%app/">Open simulator</a>
+            <a class="btn primary" href="%VITE_BASE_PATH%app/" data-launch-app>Open simulator</a>
             <a class="btn" href="%VITE_BASE_PATH%learn/power-flow/">Start with power flow</a>
           </div>
           <div class="trust-row" aria-label="Learning topics">
@@ -584,9 +686,9 @@
               <path class="pv-conductor" d="M104 228H204" />
               <path class="pv-flow" d="M104 228H204" />
 
+              <path class="pv-overload-halo" d="M204 136H436" />
               <path class="pv-energized-halo" d="M204 136H436" />
               <path class="pv-conductor" d="M204 136H436" />
-              <path class="pv-overload-halo" d="M314 136H436" />
               <path class="pv-flow" d="M204 136H436" />
 
               <path class="pv-energized-halo" d="M436 228H540" />
@@ -613,9 +715,15 @@
               <text class="pv-note" x="184" y="92">BUS A</text>
               <text class="pv-note" x="416" y="92">BUS B</text>
               <text class="pv-label" x="282" y="120">Line A-B</text>
-              <text class="pv-chip-text" x="318" y="160">118% overload corridor</text>
+              <text class="pv-chip-text" x="320" y="166" text-anchor="middle">118% overload corridor</text>
               <text class="pv-label" x="58" y="264">GEN</text>
               <text class="pv-label" x="542" y="264">LOAD</text>
+              <rect class="pv-card" x="242" y="260" width="154" height="54" rx="14" />
+              <text class="pv-card-title" x="258" y="282">Trip Matrix</text>
+              <text class="pv-card-value" x="258" y="300">OLS target armed</text>
+              <rect class="pv-card" x="424" y="42" width="142" height="54" rx="14" />
+              <text class="pv-card-title" x="440" y="64">PF Lite</text>
+              <text class="pv-card-value" x="440" y="82">88 MW / 118%</text>
             </svg>
           </div>
           <div class="metrics">
@@ -658,8 +766,47 @@
 
       <footer>
         <span>Created by Ari Sulistiono — open-source power-system learning.</span>
-        <span><a href="%VITE_BASE_PATH%app/">Simulator</a> · <a href="%VITE_BASE_PATH%glossary/">Glossary</a> · <a href="https://github.com/masarray/ads">GitHub</a></span>
+        <span><a href="%VITE_BASE_PATH%app/" data-launch-app>Simulator</a> · <a href="%VITE_BASE_PATH%glossary/">Glossary</a> · <a href="https://github.com/masarray/ads">GitHub</a></span>
       </footer>
     </main>
+    <div class="launch-transition" aria-hidden="true">
+      <section class="launch-card">
+        <div class="launch-brand-row">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="7" cy="6" r="3"></circle>
+              <circle cx="17" cy="6" r="3"></circle>
+              <circle cx="12" cy="18" r="3"></circle>
+              <path d="M7 9v1a5 5 0 0 0 5 5"></path>
+              <path d="M17 9v1a5 5 0 0 1-5 5"></path>
+            </svg>
+          </span>
+          <div>
+            <h2>Mas Ari ADS</h2>
+            <p>Preparing smart defense scheme cockpit</p>
+          </div>
+        </div>
+        <div class="launch-progress"><span></span></div>
+      </section>
+    </div>
+    <script>
+      (() => {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const links = document.querySelectorAll("[data-launch-app]");
+        for (const link of links) {
+          link.addEventListener("click", (event) => {
+            if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const href = link.getAttribute("href");
+            if (!href) return;
+            event.preventDefault();
+            link.classList.add("launching");
+            document.body.classList.add("is-launching");
+            window.setTimeout(() => {
+              window.location.href = href;
+            }, reduceMotion ? 20 : 320);
+          });
+        }
+      })();
+    </script>
   </body>
 </html>

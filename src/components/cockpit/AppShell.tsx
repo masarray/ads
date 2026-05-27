@@ -51,7 +51,9 @@ function StartupSplash() {
       </div>
       <section className="startup-card">
         <div className="startup-brand-row">
-          <span className="startup-brand-mark">ADS</span>
+          <span className="startup-brand-mark">
+            <GitFork size={24} strokeWidth={2.6} />
+          </span>
           <div>
             <h1>Mas Ari ADS</h1>
             <p>Preparing smart defense scheme cockpit</p>
