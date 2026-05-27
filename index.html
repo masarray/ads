@@ -135,6 +135,7 @@
       @keyframes ambient { from { transform: translate3d(-1%, -1%, 0) rotate(0deg); } to { transform: translate3d(1%, 1%, 0) rotate(8deg); } }
       @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
       @keyframes dash { to { stroke-dashoffset: -36; } }
+      @keyframes pvDash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -16; } }
       @keyframes pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 
       a { color: inherit; }
@@ -337,19 +338,98 @@
         margin: 18px 0;
         border: 1px solid rgba(151,255,237,.11);
         border-radius: 24px;
-        background: rgba(2, 9, 8, .38);
+        background:
+          radial-gradient(circle at 32% 12%, rgba(135,255,244,.08), transparent 34%),
+          linear-gradient(180deg, rgba(2, 14, 13, .72), rgba(2, 9, 8, .44));
         overflow: hidden;
       }
 
-      .diagram svg { display: block; width: 100%; height: auto; }
-      .bus { stroke: #ff355d; stroke-width: 7; stroke-linecap: round; filter: drop-shadow(0 0 8px rgba(255,53,93,.4)); }
-      .flow { stroke: #87fff4; stroke-width: 3; stroke-dasharray: 6 14; stroke-linecap: round; animation: dash 1s linear infinite; filter: drop-shadow(0 0 5px rgba(135,255,244,.55)); }
-      .over { stroke: #f6bd5c; stroke-width: 7; stroke-linecap: round; opacity: .55; filter: drop-shadow(0 0 14px rgba(246,189,92,.55)); }
-      .node { fill: #ff355d; stroke: rgba(255,255,255,.82); stroke-width: 1; }
-      .open { fill: #e7fff9; }
-      .load { stroke: #ff355d; stroke-width: 3; fill: none; marker-end: url(#arrow); }
-      .label { fill: #bfeee6; font-size: 12px; font-weight: 650; letter-spacing: .02em; }
-      .softline { stroke: rgba(151,255,237,.18); stroke-width: 1; }
+      .diagram svg { display: block; width: 100%; height: auto; shape-rendering: geometricPrecision; }
+      .diagram .pv-grid { stroke: rgba(151,255,237,.15); stroke-width: 1; }
+      .diagram .pv-busbar {
+        stroke: #ff355d;
+        stroke-width: 8;
+        stroke-linecap: round;
+        fill: none;
+        filter: drop-shadow(0 0 8px rgba(255,53,93,.34));
+      }
+      .diagram .pv-energized-halo {
+        stroke: rgba(255,53,93,.78);
+        stroke-width: 8;
+        stroke-linecap: round;
+        fill: none;
+        filter: drop-shadow(0 0 5px rgba(255,53,93,.55)) drop-shadow(0 0 14px rgba(255,53,93,.14));
+      }
+      .diagram .pv-conductor {
+        stroke: #ff3b65;
+        stroke-width: 4.2;
+        stroke-linecap: round;
+        fill: none;
+      }
+      .diagram .pv-flow {
+        stroke: #93fff7;
+        stroke-width: 2.25;
+        stroke-dasharray: 5 11;
+        stroke-dashoffset: 0;
+        stroke-linecap: round;
+        fill: none;
+        animation: pvDash 720ms linear infinite;
+        filter: none;
+        opacity: .98;
+      }
+      .diagram .pv-overload-halo {
+        stroke: rgba(246, 189, 92, .28);
+        stroke-width: 10;
+        stroke-linecap: round;
+        fill: none;
+        filter: drop-shadow(0 0 7px rgba(246,189,92,.52)) drop-shadow(0 0 14px rgba(246,189,92,.18));
+      }
+      .diagram .pv-breaker {
+        fill: #ff355d;
+        stroke: #ecfff9;
+        stroke-width: 2;
+        filter: drop-shadow(0 0 7px rgba(255,53,93,.4));
+      }
+      .diagram .pv-breaker-open {
+        fill: #ecfff9;
+        stroke: rgba(255,255,255,.94);
+        stroke-width: 2;
+        filter: drop-shadow(0 0 7px rgba(236,255,249,.32));
+      }
+      .diagram .pv-terminal { fill: #ff5d7c; filter: drop-shadow(0 0 5px rgba(255,53,93,.45)); }
+      .diagram .pv-gen,
+      .diagram .pv-load-symbol {
+        fill: rgba(2, 14, 13, .9);
+        stroke: #ff355d;
+        stroke-width: 4;
+        filter: drop-shadow(0 0 8px rgba(255,53,93,.26));
+      }
+      .diagram .pv-load-arrow {
+        stroke: #ff355d;
+        stroke-width: 4;
+        stroke-linecap: round;
+        fill: none;
+        marker-end: url(#pv-arrow);
+        filter: drop-shadow(0 0 5px rgba(255,53,93,.32));
+      }
+      .diagram .pv-label {
+        fill: #d9fff7 !important;
+        font-size: 12px;
+        font-weight: 680;
+        letter-spacing: .015em;
+      }
+      .diagram .pv-note {
+        fill: #9fd9cf !important;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: .02em;
+      }
+      .diagram .pv-chip-text {
+        fill: #fff2d5 !important;
+        font-size: 11px;
+        font-weight: 720;
+        letter-spacing: .02em;
+      }
 
       .metrics {
         display: grid;
@@ -481,34 +561,58 @@
             <span class="badge">LIVE</span>
           </div>
           <div class="diagram">
-            <svg viewBox="0 0 640 360" role="img" aria-label="Animated single line diagram preview">
+            <svg viewBox="0 0 640 360" role="img" aria-label="Mini single line diagram showing generator to Bus A, Line A-B transfer corridor, Bus B, and connected load">
               <defs>
-                <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                <marker id="pv-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
                   <path d="M0,0 L0,6 L9,3 z" fill="#ff355d" />
                 </marker>
               </defs>
-              <path class="softline" d="M40 74H600M40 148H600M40 222H600M40 296H600" />
-              <path class="softline" d="M80 36V330M180 36V330M280 36V330M380 36V330M480 36V330M580 36V330" />
-              <path class="bus" d="M110 170H530" />
-              <path class="bus" d="M90 265H295" />
-              <path class="bus" d="M360 265H565" />
-              <path class="flow" d="M110 170H530" />
-              <path class="flow" d="M90 265H295" />
-              <path class="flow" d="M565 265H360" />
-              <path class="over" d="M360 265H565" />
-              <path class="flow" d="M164 265V170" />
-              <path class="flow" d="M465 170V265" />
-              <rect class="node" x="152" y="252" width="24" height="24" rx="4" />
-              <rect class="node open" x="453" y="157" width="24" height="24" rx="4" />
-              <rect class="node" x="452" y="252" width="24" height="24" rx="4" />
-              <path class="load" d="M232 265V318" />
-              <path class="load" d="M514 265V318" />
-              <circle cx="112" cy="320" r="18" fill="none" stroke="#ff355d" stroke-width="4" />
-              <circle cx="390" cy="320" r="18" fill="none" stroke="#ff355d" stroke-width="4" />
-              <text class="label" x="104" y="150">Line A-B</text>
-              <text class="label" x="355" y="246">Overload corridor</text>
-              <text class="label" x="72" y="348">GEN</text>
-              <text class="label" x="502" y="348">LOAD</text>
+
+              <!-- Subtle engineering grid -->
+              <path class="pv-grid" d="M40 72H600M40 144H600M40 216H600M40 288H600" />
+              <path class="pv-grid" d="M96 36V324M192 36V324M288 36V324M384 36V324M480 36V324M576 36V324" />
+
+              <!-- Authoritative busbars: no dash animation on busbar -->
+              <path class="pv-busbar" d="M204 104V268" />
+              <path class="pv-busbar" d="M436 104V268" />
+
+              <!-- Energized conductors -->
+              <path class="pv-energized-halo" d="M104 228H204" />
+              <path class="pv-conductor" d="M104 228H204" />
+              <path class="pv-flow" d="M104 228H204" />
+
+              <path class="pv-energized-halo" d="M204 136H436" />
+              <path class="pv-conductor" d="M204 136H436" />
+              <path class="pv-overload-halo" d="M314 136H436" />
+              <path class="pv-flow" d="M204 136H436" />
+
+              <path class="pv-energized-halo" d="M436 228H540" />
+              <path class="pv-conductor" d="M436 228H540" />
+              <path class="pv-flow" d="M436 228H540" />
+
+              <!-- Breakers on real feeders / line terminals -->
+              <rect class="pv-breaker" x="142" y="216" width="24" height="24" rx="4" />
+              <rect class="pv-breaker" x="238" y="124" width="24" height="24" rx="4" />
+              <rect class="pv-breaker" x="382" y="124" width="24" height="24" rx="4" />
+              <rect class="pv-breaker" x="480" y="216" width="24" height="24" rx="4" />
+
+              <!-- Bus connection dots -->
+              <circle class="pv-terminal" cx="204" cy="136" r="5" />
+              <circle class="pv-terminal" cx="204" cy="228" r="5" />
+              <circle class="pv-terminal" cx="436" cy="136" r="5" />
+              <circle class="pv-terminal" cx="436" cy="228" r="5" />
+
+              <!-- Source and load symbols, both connected to the one-line network -->
+              <circle class="pv-gen" cx="76" cy="228" r="20" />
+              <path class="pv-load-arrow" d="M548 228H584" />
+
+              <!-- Labels -->
+              <text class="pv-note" x="184" y="92">BUS A</text>
+              <text class="pv-note" x="416" y="92">BUS B</text>
+              <text class="pv-label" x="282" y="120">Line A-B</text>
+              <text class="pv-chip-text" x="318" y="160">118% overload corridor</text>
+              <text class="pv-label" x="58" y="264">GEN</text>
+              <text class="pv-label" x="542" y="264">LOAD</text>
             </svg>
           </div>
           <div class="metrics">
